@@ -60,7 +60,7 @@ loginButton.addEventListener('click', () => {
         // Load saved tasks
         loadSavedTasks();
     } else {
-        alert('Please enter a valid OpenAI API key starting with "sk-"');
+        alert('Voer een geldige OpenAI API key in die begint met "sk-"');
     }
 });
 
@@ -94,44 +94,47 @@ function updateUILanguage() {
     const isDutchUI = allTasks.length > 0 && 
                      allTasks.filter(task => isTaskInDutch(task)).length > allTasks.length / 2;
     
+    // Default to Dutch for Striks branding
+    const preferDutch = true; // Altijd Nederlands voor Striks
+    
     // Update button text
-    viewAllTasksButton.textContent = isDutchUI ? 'Alle Taken Weergeven' : 'View All Tasks';
-    clearAllTasksButton.textContent = isDutchUI ? 'Alle Taken Wissen' : 'Clear All Tasks';
-    copyButton.textContent = isDutchUI ? 'Kopieer Alle Taken' : 'Copy All Tasks';
+    viewAllTasksButton.textContent = preferDutch ? 'Alle Taken Weergeven' : 'View All Tasks';
+    clearAllTasksButton.textContent = preferDutch ? 'Alle Taken Wissen' : 'Clear All Tasks';
+    copyButton.textContent = preferDutch ? 'Kopieer Alle Taken' : 'Copy All Tasks';
     
     // Update status message if it's showing a standard message
     if (statusElement.textContent === 'Ready to record new tasks' || 
         statusElement.textContent === 'Klaar om nieuwe taken op te nemen') {
-        statusElement.textContent = isDutchUI ? 'Klaar om nieuwe taken op te nemen' : 'Ready to record new tasks';
+        statusElement.textContent = preferDutch ? 'Klaar om nieuwe taken op te nemen' : 'Ready to record new tasks';
     }
     
     // Update record button if it's not currently recording
     if (!isRecording) {
-        recordButton.textContent = isDutchUI ? 'Start Opname' : 'Start Recording';
+        recordButton.textContent = preferDutch ? 'Start Opname' : 'Start Recording';
     }
 }
 
 viewAllTasksButton.addEventListener('click', () => {
-    const isDutchUI = allTasks.length > 0 && 
-                     allTasks.filter(task => isTaskInDutch(task)).length > allTasks.length / 2;
+    // Default to Dutch for Striks branding
+    const preferDutch = true;
     
     if (allTasks.length > 0) {
         displayTasks(allTasks);
-        statusElement.textContent = isDutchUI ? 'Alle opgeslagen taken weergeven' : 'Displaying all saved tasks';
+        statusElement.textContent = preferDutch ? 'Alle opgeslagen taken weergeven' : 'Displaying all saved tasks';
     } else {
         tasksContainer.classList.remove('hidden');
-        tasksElement.innerHTML = isDutchUI ? 
+        tasksElement.innerHTML = preferDutch ? 
             '<p>Er zijn nog geen taken opgeslagen.</p>' : 
             '<p>No tasks have been saved yet.</p>';
-        statusElement.textContent = isDutchUI ? 'Geen taken gevonden' : 'No tasks found';
+        statusElement.textContent = preferDutch ? 'Geen taken gevonden' : 'No tasks found';
     }
 });
 
 clearAllTasksButton.addEventListener('click', () => {
-    const isDutchUI = allTasks.length > 0 && 
-                    allTasks.filter(task => isTaskInDutch(task)).length > allTasks.length / 2;
+    // Default to Dutch for Striks branding
+    const preferDutch = true;
     
-    const confirmMessage = isDutchUI ? 
+    const confirmMessage = preferDutch ? 
         'Weet je zeker dat je alle taken wilt wissen?' : 
         'Are you sure you want to delete all tasks?';
         
@@ -139,10 +142,10 @@ clearAllTasksButton.addEventListener('click', () => {
         allTasks = [];
         saveTasks();
         tasksContainer.classList.remove('hidden');
-        tasksElement.innerHTML = isDutchUI ? 
+        tasksElement.innerHTML = preferDutch ? 
             '<p>Alle taken zijn gewist.</p>' : 
             '<p>All tasks have been cleared.</p>';
-        statusElement.textContent = isDutchUI ? 'Alle taken gewist' : 'All tasks cleared';
+        statusElement.textContent = preferDutch ? 'Alle taken gewist' : 'All tasks cleared';
     }
 });
 
@@ -156,9 +159,8 @@ function deleteTask(index) {
 recordButton.addEventListener('click', toggleRecording);
 
 async function toggleRecording() {
-    // Get current UI language preference
-    const isDutchUI = allTasks.length > 0 && 
-                     allTasks.filter(task => isTaskInDutch(task)).length > allTasks.length / 2;
+    // Default to Dutch for Striks branding
+    const preferDutch = true;
                      
     if (!isRecording) {
         // Start recording
@@ -209,21 +211,21 @@ async function toggleRecording() {
             
             mediaRecorder.addEventListener('stop', async () => {
                 recordButton.disabled = true;
-                statusElement.textContent = isDutchUI ? 'Audio verwerken...' : 'Processing audio...';
+                statusElement.textContent = preferDutch ? 'Audio verwerken...' : 'Processing audio...';
                 await processAudio();
                 recordButton.disabled = false;
             });
             
             mediaRecorder.start();
             isRecording = true;
-            recordButton.textContent = isDutchUI ? 'Stop Opname' : 'Stop Recording';
+            recordButton.textContent = preferDutch ? 'Stop Opname' : 'Stop Recording';
             recordButton.classList.add('recording');
-            statusElement.textContent = isDutchUI ? 
+            statusElement.textContent = preferDutch ? 
                 'Opname... Spreek duidelijk in je microfoon' : 
                 'Recording... Speak clearly into your microphone';
         } catch (error) {
             console.error('Error accessing microphone:', error);
-            statusElement.textContent = isDutchUI ? 
+            statusElement.textContent = preferDutch ? 
                 'Fout: Kon geen toegang krijgen tot de microfoon' : 
                 'Error: Could not access microphone';
         }
@@ -231,9 +233,9 @@ async function toggleRecording() {
         // Stop recording
         mediaRecorder.stop();
         isRecording = false;
-        recordButton.textContent = isDutchUI ? 'Start Opname' : 'Start Recording';
+        recordButton.textContent = preferDutch ? 'Start Opname' : 'Start Recording';
         recordButton.classList.remove('recording');
-        statusElement.textContent = isDutchUI ? 'Verwerken...' : 'Processing...';
+        statusElement.textContent = preferDutch ? 'Verwerken...' : 'Processing...';
         
         // Stop all tracks on the stream
         if (mediaRecorder && mediaRecorder.stream) {
@@ -247,6 +249,9 @@ async function processAudio() {
         // Create audio blob and form data
         const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
         
+        // Default to Dutch for Striks branding
+        const preferDutch = true;
+        
         // First, transcribe the audio using Whisper API
         const formData = new FormData();
         formData.append('file', audioBlob, 'recording.webm');
@@ -257,11 +262,7 @@ async function processAudio() {
         // Update prompt to be language-neutral
         formData.append('prompt', 'This recording may contain tasks, to-do items, and reminders in various languages.');
         
-        // Get UI language status - default to English for new tasks
-        const isDutchUI = allTasks.length > 0 && 
-                         allTasks.filter(task => isTaskInDutch(task)).length > allTasks.length / 2;
-        
-        statusElement.textContent = isDutchUI ? 'Audio transcriberen...' : 'Transcribing audio...';
+        statusElement.textContent = preferDutch ? 'Audio transcriberen...' : 'Transcribing audio...';
         
         const transcriptionResponse = await fetch('https://api.openai.com/v1/audio/transcriptions', {
             method: 'POST',
@@ -287,7 +288,7 @@ async function processAudio() {
         const isDutchText = detectDutchLanguage(transcribedText);
         
         // Now, process the transcription using GPT to extract tasks
-        statusElement.textContent = isDutchText ? 'Taken extraheren...' : 'Extracting tasks...';
+        statusElement.textContent = preferDutch ? 'Taken extraheren...' : 'Extracting tasks...';
         
         const chatResponse = await fetch('https://api.openai.com/v1/chat/completions', {
             method: 'POST',
@@ -374,18 +375,17 @@ Return tasks as a valid JSON array with no extra text.`
         
         // Display all tasks
         displayTasks(allTasks);
-        statusElement.textContent = isDutchText ? 
+        statusElement.textContent = preferDutch ? 
             'Klaar om nieuwe taken op te nemen' : 
             'Ready to record new tasks';
         
     } catch (error) {
         console.error('Error processing audio:', error);
         
-        // Determine language for error message
-        const isDutchUI = allTasks.length > 0 && 
-                         allTasks.filter(task => isTaskInDutch(task)).length > allTasks.length / 2;
+        // Default to Dutch for Striks branding
+        const preferDutch = true;
                          
-        statusElement.textContent = isDutchUI ? 
+        statusElement.textContent = preferDutch ? 
             `Fout: ${error.message}` : 
             `Error: ${error.message}`;
     }
@@ -413,13 +413,36 @@ function displayTasks(tasks) {
     tasksElement.innerHTML = '';
     
     if (tasks.length === 0) {
-        tasksElement.innerHTML = '<p>No tasks identified. Try recording again with clearer instructions.</p>';
+        tasksElement.innerHTML = '<p>Geen taken gevonden. Probeer opnieuw op te nemen met duidelijkere instructies.</p>';
         return;
     }
     
     tasks.forEach((task, index) => {
         const taskElement = document.createElement('div');
         taskElement.className = 'task-item';
+        
+        // Voeg category class toe voor styling
+        if (task.category) {
+            const categoryLower = task.category.toLowerCase();
+            if (categoryLower.includes('werk') || categoryLower.includes('work')) {
+                taskElement.classList.add('task-category-werk');
+            } else if (categoryLower.includes('familie') || categoryLower.includes('family')) {
+                taskElement.classList.add('task-category-familie');
+            } else if (categoryLower.includes('huishouden') || categoryLower.includes('household')) {
+                taskElement.classList.add('task-category-huishouden');
+            } else if (categoryLower.includes('persoonlijk') || categoryLower.includes('personal')) {
+                taskElement.classList.add('task-category-persoonlijk');
+            }
+        }
+        
+        // Voeg priority class toe voor styling
+        if (task.criticality) {
+            const criticalityLower = task.criticality.toLowerCase();
+            if (criticalityLower.includes('high') || criticalityLower.includes('hoog') || 
+                criticalityLower.includes('very') || criticalityLower.includes('zeer')) {
+                taskElement.classList.add('priority-high');
+            }
+        }
         
         // Format due date
         let dueDateDisplay = task.due_date ? new Date(task.due_date).toLocaleDateString() : 
@@ -437,7 +460,7 @@ function displayTasks(tasks) {
                 <button class="delete-task-button" data-index="${index}">×</button>
             </div>
             <div class="task-metadata">
-                <span>${priorityLabel}${task.criticality || 'normal'}</span>
+                <span>${priorityLabel}${task.criticality || 'normaal'}</span>
                 <span>${isTaskInDutch(task) ? 'Deadline: ' : 'Due: '}${dueDateDisplay}</span>
                 <span>${categoryLabel}${task.category || (isTaskInDutch(task) ? 'Overig' : 'Uncategorized')}</span>
             </div>
@@ -491,18 +514,14 @@ copyButton.addEventListener('click', () => {
     navigator.clipboard.writeText(clipboardText)
         .then(() => {
             const originalText = copyButton.textContent;
-            // Check if most tasks are Dutch to show Dutch confirmation
-            const isDutchUI = allTasks.length > 0 && 
-                             allTasks.filter(task => isTaskInDutch(task)).length > allTasks.length / 2;
-            
-            copyButton.textContent = isDutchUI ? 'Gekopieerd!' : 'Copied!';
+            copyButton.textContent = 'Gekopieerd!';
             setTimeout(() => {
                 copyButton.textContent = originalText;
             }, 2000);
         })
         .catch(err => {
             console.error('Failed to copy: ', err);
-            alert('Failed to copy tasks to clipboard');
+            alert('Kon taken niet naar klembord kopiëren');
         });
 });
 

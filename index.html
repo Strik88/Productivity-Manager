@@ -3,38 +3,80 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Voice Task Manager</title>
+    <title>Striks Voice Task Manager</title>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
     <div class="container">
         <div id="login-screen" class="screen">
-            <h1>Voice Task Manager</h1>
-            <p>Enter your OpenAI API key to continue:</p>
-            <input type="password" id="api-key-input" placeholder="sk-...">
-            <button id="login-button">Login</button>
-            <p class="info">Your API key is stored locally in your browser and never sent to our servers.</p>
+            <div class="app-header">
+                <svg class="app-logo" width="40" height="40" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M100 20C80 40 60 60 40 80C20 100 0 120 20 140C40 160 60 140 80 120C100 100 120 80 140 60C160 40 180 20 160 0C140 -20 120 0 100 20Z" fill="url(#paint0_linear)"/>
+                    <path d="M100 180C120 160 140 140 160 120C180 100 200 80 180 60C160 40 140 60 120 80C100 100 80 120 60 140C40 160 20 180 40 200C60 220 80 200 100 180Z" fill="url(#paint1_linear)"/>
+                    <defs>
+                        <linearGradient id="paint0_linear" x1="20" y1="140" x2="160" y2="0" gradientUnits="userSpaceOnUse">
+                            <stop offset="0" stop-color="#8A4E85"/>
+                            <stop offset="1" stop-color="#F27052"/>
+                        </linearGradient>
+                        <linearGradient id="paint1_linear" x1="180" y1="60" x2="40" y2="200" gradientUnits="userSpaceOnUse">
+                            <stop offset="0" stop-color="#4B99D2"/>
+                            <stop offset="1" stop-color="#3BC5C9"/>
+                        </linearGradient>
+                    </defs>
+                </svg>
+                <h1>Striks Voice Task Manager</h1>
+            </div>
+            <div class="screen-content" style="padding: 20px;">
+                <p>Voer je OpenAI API key in om door te gaan:</p>
+                <input type="password" id="api-key-input" placeholder="sk-...">
+                <button id="login-button">Inloggen</button>
+                <p class="info">Je API key wordt lokaal in je browser opgeslagen en wordt nooit naar onze servers verzonden.</p>
+            </div>
         </div>
 
         <div id="app-screen" class="screen hidden">
-            <h1>Voice Task Manager</h1>
-            <div class="controls">
-                <button id="record-button" class="primary-button">Start Recording</button>
-                <button id="logout-button" class="secondary-button">Logout</button>
+            <div class="app-header">
+                <svg class="app-logo" width="40" height="40" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M100 20C80 40 60 60 40 80C20 100 0 120 20 140C40 160 60 140 80 120C100 100 120 80 140 60C160 40 180 20 160 0C140 -20 120 0 100 20Z" fill="url(#paint0_linear)"/>
+                    <path d="M100 180C120 160 140 140 160 120C180 100 200 80 180 60C160 40 140 60 120 80C100 100 80 120 60 140C40 160 20 180 40 200C60 220 80 200 100 180Z" fill="url(#paint1_linear)"/>
+                    <defs>
+                        <linearGradient id="paint0_linear" x1="20" y1="140" x2="160" y2="0" gradientUnits="userSpaceOnUse">
+                            <stop offset="0" stop-color="#8A4E85"/>
+                            <stop offset="1" stop-color="#F27052"/>
+                        </linearGradient>
+                        <linearGradient id="paint1_linear" x1="180" y1="60" x2="40" y2="200" gradientUnits="userSpaceOnUse">
+                            <stop offset="0" stop-color="#4B99D2"/>
+                            <stop offset="1" stop-color="#3BC5C9"/>
+                        </linearGradient>
+                    </defs>
+                </svg>
+                <h1>Striks Voice Task Manager</h1>
             </div>
-            
-            <div id="status" class="status">Ready to record</div>
-            
-            <div id="transcription-container" class="hidden">
-                <h2>Transcription</h2>
-                <div id="transcription" class="text-box"></div>
+            <div class="screen-content" style="padding: 20px;">
+                <div class="controls">
+                    <button id="record-button" class="primary-button">Start Opname</button>
+                    <div class="button-group">
+                        <button id="logout-button" class="secondary-button">Uitloggen</button>
+                    </div>
+                </div>
+                
+                <div id="status" class="status">Klaar om op te nemen</div>
+                
+                <div id="transcription-container" class="hidden">
+                    <h2>Transcriptie</h2>
+                    <div id="transcription" class="text-box"></div>
+                </div>
+                
+                <div id="tasks-container" class="hidden">
+                    <h2>Taken</h2>
+                    <div id="tasks" class="tasks-list"></div>
+                    <button id="copy-button" class="secondary-button">Kopieer Alle Taken</button>
+                </div>
             </div>
-            
-            <div id="tasks-container" class="hidden">
-                <h2>Tasks</h2>
-                <div id="tasks" class="tasks-list"></div>
-                <button id="copy-button" class="secondary-button">Copy All Tasks</button>
-            </div>
+        </div>
+        
+        <div class="striks-footer">
+            <p>Ontwikkeld door <a href="https://www.striks.nl" target="_blank">Striks AI Consulting</a> | Human Led AI Innovation</p>
         </div>
     </div>
 
