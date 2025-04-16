@@ -824,6 +824,16 @@ async function processAudio() {
         
         statusElement.textContent = preferDutch ? 'Audio transcriberen...' : 'Transcribing audio...';
         
+        // Voeg een timer toe om te detecteren of de API-aanroep vast komt te zitten
+        const apiTimeoutTimer = setTimeout(() => {
+            console.warn('Whisper API request appears to be stalled (30 seconds with no response)');
+            statusElement.textContent = preferDutch ? 
+                'API verzoek duurt lang... probeer een kortere opname of controleer je API-sleutel' : 
+                'API request is taking a long time... try a shorter recording or check your API key';
+        }, 30000); // 30 seconden timeout
+        
+        console.log('Initiating fetch request to Whisper API with API key starting with:', apiKey.substring(0, 15) + '...');
+        
         const transcriptionResponse = await fetch('https://api.openai.com/v1/audio/transcriptions', {
             method: 'POST',
             headers: {
@@ -832,16 +842,40 @@ async function processAudio() {
             body: formData
         });
         
+        // Verwijder de timeout omdat we een antwoord hebben gekregen
+        clearTimeout(apiTimeoutTimer);
+        
         console.log('Whisper API response status:', transcriptionResponse.status);
+        console.log('Whisper API response headers:', Object.fromEntries([...transcriptionResponse.headers.entries()]));
         
         if (!transcriptionResponse.ok) {
-            const errorData = await transcriptionResponse.json();
-            console.error('Whisper API error:', errorData);
-            throw new Error(`API Error: ${errorData.error?.message || 'Unknown error'}`);
+            const errorText = await transcriptionResponse.text();
+            console.error('Whisper API error response text:', errorText);
+            
+            try {
+                const errorData = JSON.parse(errorText);
+                console.error('Whisper API error:', errorData);
+                throw new Error(`API Error: ${errorData.error?.message || 'Unknown error'}`);
+            } catch (jsonError) {
+                // Als het geen JSON is, gebruik de ruwe tekst
+                throw new Error(`API Error: ${errorText || 'Unknown error'}`);
+            }
         }
         
-        const transcriptionData = await transcriptionResponse.json();
-        console.log('Whisper API response data:', transcriptionData);
+        // Log timing information
+        console.log('Whisper API response received successfully');
+                    
+        const transcriptionText = await transcriptionResponse.text();
+        console.log('Raw response text:', transcriptionText.substring(0, 500) + (transcriptionText.length > 500 ? '...' : ''));
+        
+        let transcriptionData;
+        try {
+            transcriptionData = JSON.parse(transcriptionText);
+            console.log('Whisper API response data:', transcriptionData);
+        } catch (jsonError) {
+            console.error('Error parsing JSON from Whisper API response:', jsonError);
+            throw new Error('Kon de API-respons niet verwerken (JSON parsing error)');
+        }
         
         if (!transcriptionData.text || transcriptionData.text.trim() === '') {
             console.warn('Whisper API returned empty transcription');
