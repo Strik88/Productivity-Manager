@@ -3,6 +3,7 @@ const loginScreen = document.getElementById('login-screen');
 const appScreen = document.getElementById('app-screen');
 const apiKeyInput = document.getElementById('api-key-input');
 const loginButton = document.getElementById('login-button');
+console.log('Login button element found:', loginButton); // Check of het element bestaat
 const logoutButton = document.getElementById('logout-button');
 const recordButton = document.getElementById('record-button');
 const statusElement = document.getElementById('status');
@@ -50,8 +51,19 @@ window.addEventListener('DOMContentLoaded', () => {
 
 // Login/Logout Handlers
 loginButton.addEventListener('click', () => {
+    console.log('Login button clicked');
+    // Voeg een test toe om te controleren of de elementen correct worden gevonden
+    if (!loginButton) console.error('Login button element is null');
+    if (!apiKeyInput) console.error('API key input element is null');
+    if (!loginScreen) console.error('Login screen element is null');
+    if (!appScreen) console.error('App screen element is null');
+
+    // Toon ook de waarde van de input voor debugging
+    console.log('Input value:', apiKeyInput.value);
+    
     const inputKey = apiKeyInput.value.trim();
     if (inputKey && inputKey.startsWith('sk-')) {
+        console.log('Valid API key entered');
         apiKey = inputKey;
         localStorage.setItem('voiceTaskApiKey', apiKey);
         loginScreen.classList.add('hidden');
@@ -60,6 +72,7 @@ loginButton.addEventListener('click', () => {
         // Load saved tasks
         loadSavedTasks();
     } else {
+        console.log('Invalid API key');
         alert('Voer een geldige OpenAI API key in die begint met "sk-"');
     }
 });
