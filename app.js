@@ -25,10 +25,6 @@ clearAllTasksButton.id = 'clear-all-tasks-button';
 clearAllTasksButton.className = 'secondary-button danger';
 clearAllTasksButton.textContent = 'Clear All Tasks';
 
-// Insert buttons next to the logout button
-document.querySelector('.controls').insertBefore(viewAllTasksButton, logoutButton);
-document.querySelector('.controls').insertBefore(clearAllTasksButton, logoutButton);
-
 // App State
 let isRecording = false;
 let mediaRecorder = null;
@@ -38,6 +34,21 @@ let allTasks = []; // Store all tasks
 
 // Check if we have a saved API key and tasks
 window.addEventListener('DOMContentLoaded', () => {
+    console.log('DOM fully loaded');
+    
+    // Nu de DOM geladen is, voegen we de knoppen toe
+    const controlsElement = document.querySelector('.controls');
+    if (controlsElement && logoutButton) {
+        // Insert buttons next to the logout button
+        controlsElement.insertBefore(viewAllTasksButton, logoutButton);
+        controlsElement.insertBefore(clearAllTasksButton, logoutButton);
+        console.log('Task management buttons added to the UI');
+    } else {
+        console.error('Could not find controls element or logout button for button insertion');
+        if (!controlsElement) console.error('Controls element not found');
+        if (!logoutButton) console.error('Logout button not found');
+    }
+    
     const savedApiKey = localStorage.getItem('voiceTaskApiKey');
     if (savedApiKey) {
         apiKey = savedApiKey;
