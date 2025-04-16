@@ -53,6 +53,9 @@ function initApp() {
         loadSavedTasks();
     }
     
+    // Set up event listeners
+    setupEventListeners();
+    
     console.log('App initialization complete');
 }
 
@@ -64,35 +67,6 @@ if (document.readyState === 'loading') {
     initApp();
 }
 
-// DOM Elements
-const loginScreen = document.getElementById('login-screen');
-const appScreen = document.getElementById('app-screen');
-const apiKeyInput = document.getElementById('api-key-input');
-const loginButton = document.getElementById('login-button');
-console.log('Login button element found:', loginButton);
-const logoutButton = document.getElementById('logout-button');
-const recordButton = document.getElementById('record-button');
-const statusElement = document.getElementById('status');
-const transcriptionContainer = document.getElementById('transcription-container');
-const transcriptionElement = document.getElementById('transcription');
-const tasksContainer = document.getElementById('tasks-container');
-const tasksElement = document.getElementById('tasks');
-const copyButton = document.getElementById('copy-button');
-const viewAllTasksButton = document.getElementById('view-all-tasks-button');
-const clearAllTasksButton = document.getElementById('clear-all-tasks-button');
-
-// Log which elements are found and which are not
-console.log('DOM Elements check:');
-console.log('- loginScreen:', !!loginScreen);
-console.log('- appScreen:', !!appScreen);
-console.log('- apiKeyInput:', !!apiKeyInput);
-console.log('- loginButton:', !!loginButton);
-console.log('- logoutButton:', !!logoutButton);
-console.log('- recordButton:', !!recordButton);
-console.log('- statusElement:', !!statusElement);
-console.log('- viewAllTasksButton:', !!viewAllTasksButton);
-console.log('- clearAllTasksButton:', !!clearAllTasksButton);
-
 // App State
 let isRecording = false;
 let mediaRecorder = null;
@@ -100,63 +74,140 @@ let audioChunks = [];
 let apiKey = '';
 let allTasks = []; // Store all tasks
 
-// Check if we have a saved API key and tasks
-window.addEventListener('DOMContentLoaded', () => {
-    console.log('DOM fully loaded');
+// Setup all event listeners
+function setupEventListeners() {
+    console.log('Setting up event listeners');
     
-    const savedApiKey = localStorage.getItem('voiceTaskApiKey');
-    if (savedApiKey) {
-        apiKey = savedApiKey;
-        loginScreen.classList.add('hidden');
-        appScreen.classList.remove('hidden');
-        
-        // Load saved tasks
-        loadSavedTasks();
-    }
-});
+    // Login/Logout Handlers
+    if (loginButton) {
+        loginButton.addEventListener('click', () => {
+            console.log('Login button clicked');
+            // Voeg een test toe om te controleren of de elementen correct worden gevonden
+            if (!loginButton) console.error('Login button element is null');
+            if (!apiKeyInput) console.error('API key input element is null');
+            if (!loginScreen) console.error('Login screen element is null');
+            if (!appScreen) console.error('App screen element is null');
 
-// Login/Logout Handlers
-if (loginButton) {
-    loginButton.addEventListener('click', () => {
-        console.log('Login button clicked');
-        // Voeg een test toe om te controleren of de elementen correct worden gevonden
-        if (!loginButton) console.error('Login button element is null');
-        if (!apiKeyInput) console.error('API key input element is null');
-        if (!loginScreen) console.error('Login screen element is null');
-        if (!appScreen) console.error('App screen element is null');
-
-        // Toon ook de waarde van de input voor debugging
-        console.log('Input value:', apiKeyInput.value);
-        
-        const inputKey = apiKeyInput.value.trim();
-        if (inputKey && inputKey.startsWith('sk-')) {
-            console.log('Valid API key entered');
-            apiKey = inputKey;
-            localStorage.setItem('voiceTaskApiKey', apiKey);
-            loginScreen.classList.add('hidden');
-            appScreen.classList.remove('hidden');
+            // Toon ook de waarde van de input voor debugging
+            console.log('Input value:', apiKeyInput.value);
             
-            // Load saved tasks
-            loadSavedTasks();
-        } else {
-            console.log('Invalid API key');
-            alert('Voer een geldige OpenAI API key in die begint met "sk-"');
-        }
-    });
-} else {
-    console.error('Login button not found, cannot add click event listener');
-}
+            const inputKey = apiKeyInput.value.trim();
+            if (inputKey && inputKey.startsWith('sk-')) {
+                console.log('Valid API key entered');
+                apiKey = inputKey;
+                localStorage.setItem('voiceTaskApiKey', apiKey);
+                loginScreen.classList.add('hidden');
+                appScreen.classList.remove('hidden');
+                
+                // Load saved tasks
+                loadSavedTasks();
+            } else {
+                console.log('Invalid API key');
+                alert('Voer een geldige OpenAI API key in die begint met "sk-"');
+            }
+        });
+    } else {
+        console.error('Login button not found, cannot add click event listener');
+    }
 
-if (logoutButton) {
-    logoutButton.addEventListener('click', () => {
-        apiKey = '';
-        localStorage.removeItem('voiceTaskApiKey');
-        appScreen.classList.add('hidden');
-        loginScreen.classList.remove('hidden');
-        resetUI();
-    });
-} else {
-    console.error('Logout button not found, cannot add click event listener');
+    if (logoutButton) {
+        logoutButton.addEventListener('click', () => {
+            apiKey = '';
+            localStorage.removeItem('voiceTaskApiKey');
+            appScreen.classList.add('hidden');
+            loginScreen.classList.remove('hidden');
+            resetUI();
+        });
+    } else {
+        console.error('Logout button not found, cannot add click event listener');
+    }
+    
+    if (viewAllTasksButton) {
+        viewAllTasksButton.addEventListener('click', () => {
+            // Default to Dutch for Striks branding
+            const preferDutch = true;
+            
+            if (allTasks.length > 0) {
+                displayTasks(allTasks);
+                statusElement.textContent = preferDutch ? 'Alle opgeslagen taken weergeven' : 'Displaying all saved tasks';
+            } else {
+                tasksContainer.classList.remove('hidden');
+                tasksElement.innerHTML = preferDutch ? 
+                    '<p>Er zijn nog geen taken opgeslagen.</p>' : 
+                    '<p>No tasks have been saved yet.</p>';
+                statusElement.textContent = preferDutch ? 'Geen taken gevonden' : 'No tasks found';
+            }
+        });
+    } else {
+        console.error('View all tasks button not found, cannot add click event listener');
+    }
+
+    if (clearAllTasksButton) {
+        clearAllTasksButton.addEventListener('click', () => {
+            // Default to Dutch for Striks branding
+            const preferDutch = true;
+            
+            const confirmMessage = preferDutch ? 
+                'Weet je zeker dat je alle taken wilt wissen?' : 
+                'Are you sure you want to delete all tasks?';
+                
+            if (confirm(confirmMessage)) {
+                allTasks = [];
+                saveTasks();
+                tasksContainer.classList.remove('hidden');
+                tasksElement.innerHTML = preferDutch ? 
+                    '<p>Alle taken zijn gewist.</p>' : 
+                    '<p>All tasks have been cleared.</p>';
+                statusElement.textContent = preferDutch ? 'Alle taken gewist' : 'All tasks cleared';
+            }
+        });
+    } else {
+        console.error('Clear all tasks button not found, cannot add click event listener');
+    }
+    
+    // Voice Recording Functionality
+    if (recordButton) {
+        recordButton.addEventListener('click', function() {
+            console.log('Record button clicked');
+            toggleRecording();
+        });
+    } else {
+        console.error('Record button not found, cannot add click event listener');
+    }
+    
+    // Copy to clipboard functionality
+    if (copyButton) {
+        copyButton.addEventListener('click', () => {
+            const taskElements = document.querySelectorAll('.task-item');
+            let clipboardText = '';
+            
+            taskElements.forEach(taskElement => {
+                const title = taskElement.querySelector('h3').textContent;
+                const metadata = taskElement.querySelectorAll('.task-metadata span');
+                
+                clipboardText += `- ${title}\n`;
+                metadata.forEach(item => {
+                    clipboardText += `  ${item.textContent}\n`;
+                });
+                clipboardText += '\n';
+            });
+            
+            navigator.clipboard.writeText(clipboardText)
+                .then(() => {
+                    const originalText = copyButton.textContent;
+                    copyButton.textContent = 'Gekopieerd!';
+                    setTimeout(() => {
+                        copyButton.textContent = originalText;
+                    }, 2000);
+                })
+                .catch(err => {
+                    console.error('Failed to copy: ', err);
+                    alert('Kon taken niet naar klembord kopiëren');
+                });
+        });
+    } else {
+        console.error('Copy button not found, cannot add click event listener');
+    }
 }
 
 // Task management functions
@@ -185,63 +236,20 @@ function updateUILanguage() {
     const preferDutch = true; // Altijd Nederlands voor Striks
     
     // Update button text
-    viewAllTasksButton.textContent = preferDutch ? 'Alle Taken Weergeven' : 'View All Tasks';
-    clearAllTasksButton.textContent = preferDutch ? 'Alle Taken Wissen' : 'Clear All Tasks';
-    copyButton.textContent = preferDutch ? 'Kopieer Alle Taken' : 'Copy All Tasks';
+    if (viewAllTasksButton) viewAllTasksButton.textContent = preferDutch ? 'Alle Taken Weergeven' : 'View All Tasks';
+    if (clearAllTasksButton) clearAllTasksButton.textContent = preferDutch ? 'Alle Taken Wissen' : 'Clear All Tasks';
+    if (copyButton) copyButton.textContent = preferDutch ? 'Kopieer Alle Taken' : 'Copy All Tasks';
     
     // Update status message if it's showing a standard message
-    if (statusElement.textContent === 'Ready to record new tasks' || 
-        statusElement.textContent === 'Klaar om nieuwe taken op te nemen') {
+    if (statusElement && (statusElement.textContent === 'Ready to record new tasks' || 
+        statusElement.textContent === 'Klaar om nieuwe taken op te nemen')) {
         statusElement.textContent = preferDutch ? 'Klaar om nieuwe taken op te nemen' : 'Ready to record new tasks';
     }
     
     // Update record button if it's not currently recording
-    if (!isRecording) {
+    if (recordButton && !isRecording) {
         recordButton.textContent = preferDutch ? 'Start Opname' : 'Start Recording';
     }
-}
-
-if (viewAllTasksButton) {
-    viewAllTasksButton.addEventListener('click', () => {
-        // Default to Dutch for Striks branding
-        const preferDutch = true;
-        
-        if (allTasks.length > 0) {
-            displayTasks(allTasks);
-            statusElement.textContent = preferDutch ? 'Alle opgeslagen taken weergeven' : 'Displaying all saved tasks';
-        } else {
-            tasksContainer.classList.remove('hidden');
-            tasksElement.innerHTML = preferDutch ? 
-                '<p>Er zijn nog geen taken opgeslagen.</p>' : 
-                '<p>No tasks have been saved yet.</p>';
-            statusElement.textContent = preferDutch ? 'Geen taken gevonden' : 'No tasks found';
-        }
-    });
-} else {
-    console.error('View all tasks button not found, cannot add click event listener');
-}
-
-if (clearAllTasksButton) {
-    clearAllTasksButton.addEventListener('click', () => {
-        // Default to Dutch for Striks branding
-        const preferDutch = true;
-        
-        const confirmMessage = preferDutch ? 
-            'Weet je zeker dat je alle taken wilt wissen?' : 
-            'Are you sure you want to delete all tasks?';
-            
-        if (confirm(confirmMessage)) {
-            allTasks = [];
-            saveTasks();
-            tasksContainer.classList.remove('hidden');
-            tasksElement.innerHTML = preferDutch ? 
-                '<p>Alle taken zijn gewist.</p>' : 
-                '<p>All tasks have been cleared.</p>';
-            statusElement.textContent = preferDutch ? 'Alle taken gewist' : 'All tasks cleared';
-        }
-    });
-} else {
-    console.error('Clear all tasks button not found, cannot add click event listener');
 }
 
 function deleteTask(index) {
@@ -251,15 +259,6 @@ function deleteTask(index) {
 }
 
 // Voice Recording Functionality
-if (recordButton) {
-    recordButton.addEventListener('click', function() {
-        console.log('Record button clicked');
-        toggleRecording();
-    });
-} else {
-    console.error('Record button not found, cannot add click event listener');
-}
-
 async function toggleRecording() {
     console.log('toggleRecording function called');
     console.log('Current recording state:', isRecording);
@@ -603,51 +602,19 @@ function isTaskInDutch(task) {
     return false;
 }
 
-// Copy to clipboard functionality
-if (copyButton) {
-    copyButton.addEventListener('click', () => {
-        const taskElements = document.querySelectorAll('.task-item');
-        let clipboardText = '';
-        
-        taskElements.forEach(taskElement => {
-            const title = taskElement.querySelector('h3').textContent;
-            const metadata = taskElement.querySelectorAll('.task-metadata span');
-            
-            clipboardText += `- ${title}\n`;
-            metadata.forEach(item => {
-                clipboardText += `  ${item.textContent}\n`;
-            });
-            clipboardText += '\n';
-        });
-        
-        navigator.clipboard.writeText(clipboardText)
-            .then(() => {
-                const originalText = copyButton.textContent;
-                copyButton.textContent = 'Gekopieerd!';
-                setTimeout(() => {
-                    copyButton.textContent = originalText;
-                }, 2000);
-            })
-            .catch(err => {
-                console.error('Failed to copy: ', err);
-                alert('Kon taken niet naar klembord kopiëren');
-            });
-    });
-} else {
-    console.error('Copy button not found, cannot add click event listener');
-}
-
 function resetUI() {
-    transcriptionContainer.classList.add('hidden');
-    tasksContainer.classList.add('hidden');
-    transcriptionElement.textContent = '';
-    tasksElement.innerHTML = '';
+    if (transcriptionContainer) transcriptionContainer.classList.add('hidden');
+    if (tasksContainer) tasksContainer.classList.add('hidden');
+    if (transcriptionElement) transcriptionElement.textContent = '';
+    if (tasksElement) tasksElement.innerHTML = '';
     
     // Get current UI language preference
     const isDutchUI = allTasks.length > 0 && 
                      allTasks.filter(task => isTaskInDutch(task)).length > allTasks.length / 2;
                      
-    statusElement.textContent = isDutchUI ? 'Klaar om op te nemen' : 'Ready to record';
+    if (statusElement) {
+        statusElement.textContent = isDutchUI ? 'Klaar om op te nemen' : 'Ready to record';
+    }
     
     if (isRecording && mediaRecorder) {
         mediaRecorder.stop();
@@ -655,7 +622,9 @@ function resetUI() {
             mediaRecorder.stream.getTracks().forEach(track => track.stop());
         }
         isRecording = false;
-        recordButton.textContent = isDutchUI ? 'Start Opname' : 'Start Recording';
-        recordButton.classList.remove('recording');
+        if (recordButton) {
+            recordButton.textContent = isDutchUI ? 'Start Opname' : 'Start Recording';
+            recordButton.classList.remove('recording');
+        }
     }
 } 
