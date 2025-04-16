@@ -361,7 +361,7 @@ function checkBrowserType() {
     if (isDesktopBrowser) {
         const browserWarning = document.getElementById('browser-warning');
         if (browserWarning) {
-            browserWarning.classList.remove('hidden');
+            browserWarning.classList.add('hidden');
         }
         
         // Op desktops kunnen we ook een eenvoudige audiotest doen
