@@ -373,7 +373,20 @@ input {
 .striks-footer a {
     color: #1A2B50; /* Striks Marineblauw */
     text-decoration: none;
-    font-weight: 400; /* Regular */
+    font-weight: 600;
+}
+
+.striks-footer a:hover {
+    text-decoration: underline;
+}
+
+.footer-logo {
+    width: 50px;
+    height: auto;
+    margin-top: 10px;
+    display: block;
+    margin-left: auto;
+    margin-right: auto;
 }
 
 /* Style voor taak categorieën */
@@ -429,4 +442,25 @@ button:focus, input:focus {
 .task-item h3 {
     color: #1A2B50; /* Striks Marineblauw */
     font-weight: 600;
+}
+
+/* Striks Voice Task Manager Custom Styles */
+
+/* Warning box styling */
+.warning-box {
+    background-color: #fff3cd;
+    color: #856404;
+    padding: 15px;
+    margin: 15px 0;
+    border-radius: 5px;
+    border: 1px solid #ffeeba;
+}
+
+.warning-box ul {
+    margin-top: 10px;
+    padding-left: 20px;
+}
+
+.warning-box li {
+    margin-bottom: 5px;
 } 

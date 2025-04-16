@@ -4,6 +4,9 @@ let mediaRecorder = null;
 let audioChunks = [];
 let apiKey = '';
 let allTasks = []; // Store all tasks
+let recordingTimer = null; // Timer voor maximale opnameduur
+const MAX_RECORDING_TIME = 5 * 60 * 1000; // 5 minuten in milliseconden
+let isDesktopBrowser = false; // Indicator voor desktop browser
 
 // Check for page refresh
 if (window.isPageRefreshed || performance.navigation.type === 1) {
@@ -13,6 +16,9 @@ if (window.isPageRefreshed || performance.navigation.type === 1) {
 // Onetime initialization function
 function initApp() {
     console.log('Initializing app...');
+    
+    // Detecteer of we op een desktop browser zitten
+    checkBrowserType();
     
     // Check if DOM is already fully loaded by index.html script
     if (window.domIsFullyLoaded) {
@@ -33,6 +39,7 @@ function initApp() {
         tasksContainer: document.getElementById('tasks-container'),
         tasksElement: document.getElementById('tasks'),
         copyButton: document.getElementById('copy-button'),
+        copyTranscriptionButton: document.getElementById('copy-transcription-button'),
         viewAllTasksButton: document.getElementById('view-all-tasks-button'),
         clearAllTasksButton: document.getElementById('clear-all-tasks-button')
     };
@@ -77,6 +84,7 @@ function initApp() {
     window.tasksContainer = elements.tasksContainer;
     window.tasksElement = elements.tasksElement;
     window.copyButton = elements.copyButton;
+    window.copyTranscriptionButton = elements.copyTranscriptionButton;
     window.viewAllTasksButton = elements.viewAllTasksButton;
     window.clearAllTasksButton = elements.clearAllTasksButton;
     
@@ -114,7 +122,7 @@ function setupEventListeners() {
     // Controleer of alle benodigde elementen beschikbaar zijn
     const requiredElements = [
         'loginButton', 'logoutButton', 'recordButton', 
-        'viewAllTasksButton', 'clearAllTasksButton', 'copyButton'
+        'viewAllTasksButton', 'clearAllTasksButton', 'copyButton', 'copyTranscriptionButton'
     ];
     
     const missingElements = requiredElements.filter(name => !window[name]);
@@ -261,6 +269,28 @@ function setupEventListeners() {
     } else {
         console.error('Copy button not found, cannot add click event listener');
     }
+    
+    // Copy transcription to clipboard functionality
+    if (copyTranscriptionButton) {
+        copyTranscriptionButton.addEventListener('click', () => {
+            const transcriptionText = transcriptionElement.textContent;
+            
+            navigator.clipboard.writeText(transcriptionText)
+                .then(() => {
+                    const originalText = copyTranscriptionButton.textContent;
+                    copyTranscriptionButton.textContent = 'Gekopieerd!';
+                    setTimeout(() => {
+                        copyTranscriptionButton.textContent = originalText;
+                    }, 2000);
+                })
+                .catch(err => {
+                    console.error('Failed to copy transcription: ', err);
+                    alert('Kon transcriptie niet naar klembord kopiëren');
+                });
+        });
+    } else {
+        console.error('Copy transcription button not found, cannot add click event listener');
+    }
 }
 
 // Task management functions
@@ -292,6 +322,7 @@ function updateUILanguage() {
     if (viewAllTasksButton) viewAllTasksButton.textContent = preferDutch ? 'Alle Taken Weergeven' : 'View All Tasks';
     if (clearAllTasksButton) clearAllTasksButton.textContent = preferDutch ? 'Alle Taken Wissen' : 'Clear All Tasks';
     if (copyButton) copyButton.textContent = preferDutch ? 'Kopieer Alle Taken' : 'Copy All Tasks';
+    if (copyTranscriptionButton) copyTranscriptionButton.textContent = preferDutch ? 'Kopieer Transcriptie' : 'Copy Transcription';
     
     // Update status message if it's showing a standard message
     if (statusElement && (statusElement.textContent === 'Ready to record new tasks' || 
@@ -311,10 +342,147 @@ function deleteTask(index) {
     displayTasks(allTasks);
 }
 
+// Function to detect browser type and capabilities
+function checkBrowserType() {
+    // Detecteer of we op desktop of mobiel zitten
+    const userAgent = navigator.userAgent || navigator.vendor || window.opera;
+    isDesktopBrowser = !/android|iphone|ipad|ipod|mobile|phone/i.test(userAgent);
+    
+    console.log('Browser detection:', {
+        userAgent,
+        isDesktopBrowser,
+        isChrome: /chrome/i.test(userAgent) && !/edge|edg/i.test(userAgent),
+        isFirefox: /firefox/i.test(userAgent),
+        isSafari: /safari/i.test(userAgent) && !/chrome|chromium|edg/i.test(userAgent),
+        isEdge: /edge|edg/i.test(userAgent)
+    });
+    
+    // Toon waarschuwing voor desktop browsers
+    if (isDesktopBrowser) {
+        const browserWarning = document.getElementById('browser-warning');
+        if (browserWarning) {
+            browserWarning.classList.remove('hidden');
+        }
+        
+        // Op desktops kunnen we ook een eenvoudige audiotest doen
+        testAudioInput();
+    }
+    
+    // Controleer of de browser MediaRecorder ondersteunt
+    if (!window.MediaRecorder) {
+        console.error('MediaRecorder API niet ondersteund in deze browser');
+        alert('Je browser ondersteunt geen audio-opname. Probeer Chrome, Firefox of Edge.');
+    }
+    
+    // Controleer of getUserMedia wordt ondersteund
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        console.error('getUserMedia API niet ondersteund in deze browser');
+        alert('Je browser ondersteunt geen toegang tot de microfoon. Probeer Chrome, Firefox of Edge.');
+    }
+}
+
+// Functie om te testen of audio-input werkt
+async function testAudioInput() {
+    console.log('Testing audio input capabilities...');
+    try {
+        // Controleer eerst of we toegang hebben tot de microfoon
+        const stream = await navigator.mediaDevices.getUserMedia({
+            audio: {
+                echoCancellation: true,
+                noiseSuppression: true,
+                autoGainControl: true
+            }
+        });
+        
+        console.log('Microphone access granted for test');
+        
+        // Controleer of we daadwerkelijk audio-tracks hebben
+        const audioTracks = stream.getAudioTracks();
+        console.log(`Audio tracks detected: ${audioTracks.length}`);
+        
+        if (audioTracks.length > 0) {
+            const track = audioTracks[0];
+            console.log('Audio track info:', {
+                label: track.label,
+                enabled: track.enabled,
+                muted: track.muted,
+                readyState: track.readyState,
+                settings: track.getSettings()
+            });
+            
+            // Test of we een volume kunnen detecteren
+            try {
+                // Alleen testen in browsers die dit ondersteunen
+                if (window.AudioContext || window.webkitAudioContext) {
+                    const AudioContext = window.AudioContext || window.webkitAudioContext;
+                    const audioContext = new AudioContext();
+                    const analyser = audioContext.createAnalyser();
+                    const microphone = audioContext.createMediaStreamSource(stream);
+                    const scriptProcessor = audioContext.createScriptProcessor(2048, 1, 1);
+                    
+                    analyser.smoothingTimeConstant = 0.8;
+                    analyser.fftSize = 1024;
+                    
+                    microphone.connect(analyser);
+                    analyser.connect(scriptProcessor);
+                    scriptProcessor.connect(audioContext.destination);
+                    
+                    let testTimeoutId;
+                    let volumeDetected = false;
+                    
+                    scriptProcessor.onaudioprocess = function() {
+                        const array = new Uint8Array(analyser.frequencyBinCount);
+                        analyser.getByteFrequencyData(array);
+                        const arraySum = array.reduce((a, value) => a + value, 0);
+                        const average = arraySum / array.length;
+                        
+                        // Test of we enig geluid detecteren
+                        if (average > 5) {
+                            console.log(`Audio level detected: ${average}`);
+                            volumeDetected = true;
+                        }
+                    };
+                    
+                    // Stop de test na 3 seconden
+                    testTimeoutId = setTimeout(() => {
+                        scriptProcessor.disconnect();
+                        analyser.disconnect();
+                        microphone.disconnect();
+                        
+                        if (audioContext.state !== 'closed') {
+                            audioContext.close();
+                        }
+                        
+                        if (!volumeDetected) {
+                            console.warn('No audio volume detected during microphone test');
+                        } else {
+                            console.log('Microphone test successful - volume detected');
+                        }
+                        
+                        // Stop de tracks
+                        stream.getTracks().forEach(track => track.stop());
+                    }, 3000);
+                }
+            } catch (audioTestError) {
+                console.error('Error during advanced audio test:', audioTestError);
+                // Stop de tracks bij een fout
+                stream.getTracks().forEach(track => track.stop());
+            }
+        } else {
+            console.warn('No audio tracks found in test stream');
+            // Stop de stream omdat we hem niet nodig hebben
+            stream.getTracks().forEach(track => track.stop());
+        }
+    } catch (err) {
+        console.error('Microphone test failed:', err);
+    }
+}
+
 // Voice Recording Functionality
 async function toggleRecording() {
     console.log('toggleRecording function called');
     console.log('Current recording state:', isRecording);
+    console.log('Running on desktop browser:', isDesktopBrowser);
     
     // Default to Dutch for Striks branding
     const preferDutch = true;
@@ -335,18 +503,38 @@ async function toggleRecording() {
                         'Requesting microphone access...';
                 }
                 
+                // Pas audio-instellingen aan op basis van browser type
+                const audioConstraints = {
+                    echoCancellation: true,
+                    noiseSuppression: true,
+                    autoGainControl: true
+                };
+                
+                if (isDesktopBrowser) {
+                    // Expliciete instellingen voor desktop browsers
+                    audioConstraints.channelCount = 1;
+                    
+                    // Sommige oudere desktop browsers hebben specifieke instellingen nodig
+                    if (/firefox/i.test(navigator.userAgent)) {
+                        console.log('Configuring Firefox-specific audio settings');
+                        // Firefox heeft soms meer algemene instellingen nodig
+                    } else if (/edge|edg/i.test(navigator.userAgent)) {
+                        console.log('Configuring Edge-specific audio settings');
+                        // Edge kan soms problemen hebben met bepaalde constraints
+                    }
+                }
+                
+                console.log('Using audio constraints:', audioConstraints);
+                
                 // Improved audio settings for better quality
                 const stream = await navigator.mediaDevices.getUserMedia({
-                    audio: {
-                        echoCancellation: true,
-                        noiseSuppression: true,
-                        autoGainControl: true,
-                        sampleRate: 48000,
-                        channelCount: 1
-                    }
+                    audio: audioConstraints
                 });
                 
                 console.log('Microphone access granted');
+                console.log('Audio tracks:', stream.getAudioTracks().length);
+                console.log('Audio track settings:', stream.getAudioTracks()[0]?.getSettings());
+                console.log('Audio track constraints:', stream.getAudioTracks()[0]?.getConstraints());
                 
                 // Try preferred options with fallbacks for browser compatibility
                 let options = {};
@@ -356,7 +544,8 @@ async function toggleRecording() {
                     'audio/webm;codecs=opus',
                     'audio/webm',
                     'audio/ogg;codecs=opus',
-                    'audio/mp4'
+                    'audio/mp4',
+                    'audio/mpeg'
                 ];
                 
                 let supportedType = '';
@@ -364,36 +553,88 @@ async function toggleRecording() {
                     if (MediaRecorder.isTypeSupported(type)) {
                         supportedType = type;
                         options.mimeType = type;
+                        console.log(`Found supported mime type: ${type}`);
                         break;
+                    } else {
+                        console.log(`Mime type not supported: ${type}`);
                     }
                 }
                 
                 console.log('Using media type:', supportedType || 'default');
                 
+                // Fallback voor instellingen als er geen gewenste mimeType werkt
+                if (!supportedType) {
+                    console.warn('No preferred MIME type is supported, using default');
+                    // Op sommige browsers werkt het beter zonder mimeType specificatie
+                    delete options.mimeType;
+                }
+                
                 // Add bitrate if supported
                 try {
-                    options.audioBitsPerSecond = 128000;
+                    // Desktops hebben vaak meer ruimte voor hogere kwaliteit
+                    options.audioBitsPerSecond = isDesktopBrowser ? 128000 : 64000;
+                    console.log('Creating MediaRecorder with options:', options);
                     mediaRecorder = new MediaRecorder(stream, options);
                     console.log('MediaRecorder created with options:', options);
                 } catch (e) {
                     console.warn('Advanced audio options not supported, using defaults', e);
-                    mediaRecorder = new MediaRecorder(stream);
-                    console.log('MediaRecorder created with default options');
+                    // Probeer met minimale opties als de uitgebreide opties niet werken
+                    try {
+                        console.log('Trying to create MediaRecorder with minimal options');
+                        mediaRecorder = new MediaRecorder(stream);
+                        console.log('MediaRecorder created with default options');
+                    } catch (fallbackError) {
+                        console.error('Even basic MediaRecorder setup failed:', fallbackError);
+                        throw new Error('Je browser ondersteunt geen audio-opname. Probeer een andere browser.');
+                    }
                 }
                 
                 audioChunks = [];
                 
+                // Meer uitgebreide event handlers voor betere debugging en error handling
                 mediaRecorder.addEventListener('dataavailable', event => {
                     console.log('Audio data available, size:', event.data.size);
-                    audioChunks.push(event.data);
+                    if (event.data.size > 0) {
+                        audioChunks.push(event.data);
+                        console.log('Total audio chunks:', audioChunks.length);
+                    } else {
+                        console.warn('Received empty audio data chunk');
+                    }
                 });
                 
                 mediaRecorder.addEventListener('start', () => {
                     console.log('MediaRecorder started successfully');
+                    console.log('MediaRecorder state:', mediaRecorder.state);
+                    console.log('MediaRecorder mimeType:', mediaRecorder.mimeType);
                 });
                 
                 mediaRecorder.addEventListener('stop', async () => {
                     console.log('MediaRecorder stopped, processing chunks...');
+                    console.log('Final chunk count:', audioChunks.length);
+                    
+                    if (audioChunks.length === 0 || audioChunks.every(chunk => chunk.size === 0)) {
+                        console.error('No audio data was recorded');
+                        statusElement.textContent = preferDutch ? 
+                            'Geen audio opgenomen. Controleer of je microfoon werkt en toegang heeft.' : 
+                            'No audio was recorded. Check if your microphone is working and has access.';
+                        
+                        // Toon helpbericht voor gebruiker
+                        const noAudioHelp = document.createElement('div');
+                        noAudioHelp.style.backgroundColor = '#ffe8e8';
+                        noAudioHelp.style.padding = '15px';
+                        noAudioHelp.style.margin = '15px 0';
+                        noAudioHelp.style.borderRadius = '5px';
+                        noAudioHelp.style.border = '1px solid #d00';
+                        noAudioHelp.innerHTML = preferDutch ? 
+                            '<strong>Probleem met audio-opname</strong><br>Tips:<br>- Controleer of je microfoon werkt<br>- Zorg dat de browser toestemming heeft<br>- Probeer het opnieuw met een andere browser<br>- Probeer de pagina te herladen' : 
+                            '<strong>Audio recording issue</strong><br>Tips:<br>- Check if your microphone is working<br>- Ensure browser has permission<br>- Try again with a different browser<br>- Try reloading the page';
+                        
+                        statusElement.parentNode.insertBefore(noAudioHelp, statusElement.nextSibling);
+                        
+                        recordButton.disabled = false;
+                        return;
+                    }
+                    
                     recordButton.disabled = true;
                     statusElement.textContent = preferDutch ? 'Audio verwerken...' : 'Processing audio...';
                     await processAudio();
@@ -408,13 +649,43 @@ async function toggleRecording() {
                 });
                 
                 console.log('Starting MediaRecorder...');
-                mediaRecorder.start();
+                // Set timeslice to receive data more frequently (every 1 second instead of only at the end)
+                mediaRecorder.start(1000);
+                console.log('MediaRecorder state after start:', mediaRecorder.state);
                 isRecording = true;
                 recordButton.textContent = preferDutch ? 'Stop Opname' : 'Stop Recording';
                 recordButton.classList.add('recording');
                 statusElement.textContent = preferDutch ? 
                     'Opname... Spreek duidelijk in je microfoon' : 
                     'Recording... Speak clearly into your microphone';
+                    
+                // Start timer voor maximale opnameduur
+                recordingTimer = setTimeout(() => {
+                    if (isRecording && mediaRecorder && mediaRecorder.state === 'recording') {
+                        console.log('Maximale opnametijd bereikt (5 minuten), opname wordt automatisch gestopt');
+                        toggleRecording(); // Stop de opname
+                        
+                        // Toon feedback aan de gebruiker
+                        const maxTimeMessage = document.createElement('div');
+                        maxTimeMessage.style.backgroundColor = '#fff3cd';
+                        maxTimeMessage.style.color = '#856404';
+                        maxTimeMessage.style.padding = '10px';
+                        maxTimeMessage.style.margin = '10px 0';
+                        maxTimeMessage.style.borderRadius = '5px';
+                        maxTimeMessage.style.border = '1px solid #ffeeba';
+                        maxTimeMessage.textContent = preferDutch ? 
+                            'De opname is automatisch gestopt na 5 minuten.' : 
+                            'Recording automatically stopped after 5 minutes.';
+                        
+                        // Voeg het bericht toe na de status tekst
+                        statusElement.parentNode.insertBefore(maxTimeMessage, statusElement.nextSibling);
+                        
+                        // Verwijder het bericht na 5 seconden
+                        setTimeout(() => {
+                            maxTimeMessage.remove();
+                        }, 5000);
+                    }
+                }, MAX_RECORDING_TIME);
                     
                 console.log('Recording started successfully');
                 
@@ -466,6 +737,12 @@ async function toggleRecording() {
                 console.warn('MediaRecorder not active when trying to stop');
             }
             
+            // Maak de timer ongedaan
+            if (recordingTimer) {
+                clearTimeout(recordingTimer);
+                recordingTimer = null;
+            }
+            
             isRecording = false;
             recordButton.textContent = preferDutch ? 'Start Opname' : 'Start Recording';
             recordButton.classList.remove('recording');
@@ -490,15 +767,50 @@ async function toggleRecording() {
 
 async function processAudio() {
     try {
-        // Create audio blob and form data
-        const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-        
         // Default to Dutch for Striks branding
         const preferDutch = true;
         
+        if (audioChunks.length === 0) {
+            console.error('No audio chunks to process');
+            statusElement.textContent = preferDutch ? 
+                'Geen audio opgenomen om te verwerken' : 
+                'No audio recorded to process';
+            return;
+        }
+        
+        // Log information about audio chunks for debugging
+        console.log(`Processing ${audioChunks.length} audio chunks`);
+        audioChunks.forEach((chunk, index) => {
+            console.log(`Chunk ${index}: ${chunk.size} bytes, type: ${chunk.type}`);
+        });
+        
+        // Bepaal het juiste MIME type voor de Blob
+        let blobType = 'audio/webm';
+        
+        // Als we een mediaRecorder hebben, gebruik dan de mimeType daarvan
+        if (mediaRecorder && mediaRecorder.mimeType) {
+            blobType = mediaRecorder.mimeType;
+            console.log(`Using MediaRecorder mimeType: ${blobType}`);
+        } else if (audioChunks.length > 0 && audioChunks[0].type) {
+            // Als de chunks een type hebben, gebruik dat
+            blobType = audioChunks[0].type;
+            console.log(`Using audio chunk type: ${blobType}`);
+        } else {
+            console.log(`Falling back to default type: ${blobType}`);
+        }
+        
+        // Create audio blob and form data
+        const audioBlob = new Blob(audioChunks, { type: blobType });
+        console.log(`Created audio blob: ${audioBlob.size} bytes, type: ${audioBlob.type}`);
+        
+        // Check of de blob geldig is
+        if (audioBlob.size === 0) {
+            throw new Error('Opgenomen audiobestand is leeg. Probeer het opnieuw.');
+        }
+        
         // First, transcribe the audio using Whisper API
         const formData = new FormData();
-        formData.append('file', audioBlob, 'recording.webm');
+        formData.append('file', audioBlob, `recording${Date.now()}.webm`);
         // Using a more advanced Whisper model for better accuracy
         formData.append('model', 'whisper-1');
         // Remove the language parameter to enable auto-detection
@@ -506,6 +818,7 @@ async function processAudio() {
         // Update prompt to be language-neutral
         formData.append('prompt', 'This recording may contain tasks, to-do items, and reminders in various languages.');
         
+        console.log('Sending audio data to Whisper API for transcription');
         statusElement.textContent = preferDutch ? 'Audio transcriberen...' : 'Transcribing audio...';
         
         const transcriptionResponse = await fetch('https://api.openai.com/v1/audio/transcriptions', {
