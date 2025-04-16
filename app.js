@@ -819,6 +819,9 @@ async function processAudio() {
         formData.append('prompt', 'This recording may contain tasks, to-do items, and reminders in various languages.');
         
         console.log('Sending audio data to Whisper API for transcription');
+        // Log de grootte van het bestand dat we versturen
+        console.log(`Sending audio blob to Whisper API: ${audioBlob.size} bytes, type: ${audioBlob.type}`);
+        
         statusElement.textContent = preferDutch ? 'Audio transcriberen...' : 'Transcribing audio...';
         
         const transcriptionResponse = await fetch('https://api.openai.com/v1/audio/transcriptions', {
@@ -829,13 +832,24 @@ async function processAudio() {
             body: formData
         });
         
+        console.log('Whisper API response status:', transcriptionResponse.status);
+        
         if (!transcriptionResponse.ok) {
             const errorData = await transcriptionResponse.json();
+            console.error('Whisper API error:', errorData);
             throw new Error(`API Error: ${errorData.error?.message || 'Unknown error'}`);
         }
         
         const transcriptionData = await transcriptionResponse.json();
+        console.log('Whisper API response data:', transcriptionData);
+        
+        if (!transcriptionData.text || transcriptionData.text.trim() === '') {
+            console.warn('Whisper API returned empty transcription');
+            throw new Error('Geen spraak gedetecteerd in de opname. Probeer opnieuw en spreek duidelijk in de microfoon.');
+        }
+        
         const transcribedText = transcriptionData.text;
+        console.log('Transcribed text:', transcribedText);
         
         // Display transcription
         transcriptionContainer.classList.remove('hidden');
