@@ -2,6 +2,11 @@
 function initApp() {
     console.log('Initializing app...');
     
+    // Check if DOM is already fully loaded by index.html script
+    if (window.domIsFullyLoaded) {
+        console.log('DOM is already marked as fully loaded. Using pre-existing elements from HTML.');
+    }
+    
     // Log all DOM elements
     const elements = {
         loginScreen: document.getElementById('login-screen'),
@@ -20,7 +25,34 @@ function initApp() {
         clearAllTasksButton: document.getElementById('clear-all-tasks-button')
     };
     
-    // Assign to global variables
+    // Log which elements were found
+    let allElementsFound = true;
+    let missingElements = [];
+    
+    Object.entries(elements).forEach(([name, element]) => {
+        if (!element) {
+            allElementsFound = false;
+            missingElements.push(name);
+            console.error(`Element not found: ${name}`);
+        }
+    });
+    
+    if (!allElementsFound) {
+        console.error('Missing elements:', missingElements.join(', '));
+        
+        // Show error message on page
+        const errorMessage = document.createElement('div');
+        errorMessage.style.color = 'red';
+        errorMessage.style.padding = '10px';
+        errorMessage.style.margin = '10px';
+        errorMessage.style.border = '1px solid red';
+        errorMessage.textContent = `Sommige UI elementen konden niet worden gevonden: ${missingElements.join(', ')}`;
+        document.body.prepend(errorMessage);
+        
+        return; // Stop verdere initialisatie als er elementen ontbreken
+    }
+    
+    // Assign to global variables if all elements were found
     window.loginScreen = elements.loginScreen;
     window.appScreen = elements.appScreen;
     window.apiKeyInput = elements.apiKeyInput;
@@ -36,11 +68,7 @@ function initApp() {
     window.viewAllTasksButton = elements.viewAllTasksButton;
     window.clearAllTasksButton = elements.clearAllTasksButton;
     
-    // Log element status
-    console.log('DOM Elements found:');
-    Object.entries(elements).forEach(([name, element]) => {
-        console.log(`- ${name}: ${element ? 'Found' : 'NOT FOUND'}`);
-    });
+    console.log('All UI elements were found successfully');
     
     // Check localStorage for saved API key
     const savedApiKey = localStorage.getItem('voiceTaskApiKey');
@@ -78,7 +106,22 @@ let allTasks = []; // Store all tasks
 function setupEventListeners() {
     console.log('Setting up event listeners');
     
+    // Controleer of alle benodigde elementen beschikbaar zijn
+    const requiredElements = [
+        'loginButton', 'logoutButton', 'recordButton', 
+        'viewAllTasksButton', 'clearAllTasksButton', 'copyButton'
+    ];
+    
+    const missingElements = requiredElements.filter(name => !window[name]);
+    if (missingElements.length > 0) {
+        console.error('Cannot set up event listeners - missing elements:', missingElements.join(', '));
+        return;
+    }
+    
+    console.log('All required elements found for event listeners');
+    
     // Login/Logout Handlers
+    console.log('Setting up login button event listener');
     if (loginButton) {
         loginButton.addEventListener('click', () => {
             console.log('Login button clicked');
@@ -166,11 +209,16 @@ function setupEventListeners() {
     }
     
     // Voice Recording Functionality
+    console.log('Setting up record button event listener');
     if (recordButton) {
-        recordButton.addEventListener('click', function() {
-            console.log('Record button clicked');
+        console.log('Record button element found:', recordButton);
+        recordButton.addEventListener('click', function(event) {
+            console.log('Record button clicked', event);
+            console.log('Button text:', recordButton.textContent);
+            console.log('Recording state before toggle:', isRecording);
             toggleRecording();
         });
+        console.log('Record button event listener added successfully');
     } else {
         console.error('Record button not found, cannot add click event listener');
     }

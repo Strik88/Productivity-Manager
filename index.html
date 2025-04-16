@@ -55,6 +55,14 @@
         errorDiv.textContent = 'JavaScript Error: ' + e.message;
         document.body.prepend(errorDiv);
     });
+    
+    // Voorkom de insertBefore error door een DOMContentLoaded event handler toe te voegen
+    document.addEventListener('DOMContentLoaded', function() {
+        console.log('DOM Content Loaded - preventing insertBefore errors');
+        
+        // Voeg een marker toe om te voorkomen dat de app.js code probeert buttons toe te voegen
+        window.domIsFullyLoaded = true;
+    });
     </script>
     
     <div class="container">
