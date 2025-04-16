@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voice Task Manager</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <div id="login-screen" class="screen">
+            <h1>Voice Task Manager</h1>
+            <p>Enter your OpenAI API key to continue:</p>
+            <input type="password" id="api-key-input" placeholder="sk-...">
+            <button id="login-button">Login</button>
+            <p class="info">Your API key is stored locally in your browser and never sent to our servers.</p>
+        </div>
+
+        <div id="app-screen" class="screen hidden">
+            <h1>Voice Task Manager</h1>
+            <div class="controls">
+                <button id="record-button" class="primary-button">Start Recording</button>
+                <button id="logout-button" class="secondary-button">Logout</button>
+            </div>
+            
+            <div id="status" class="status">Ready to record</div>
+            
+            <div id="transcription-container" class="hidden">
+                <h2>Transcription</h2>
+                <div id="transcription" class="text-box"></div>
+            </div>
+            
+            <div id="tasks-container" class="hidden">
+                <h2>Tasks</h2>
+                <div id="tasks" class="tasks-list"></div>
+                <button id="copy-button" class="secondary-button">Copy All Tasks</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html> 

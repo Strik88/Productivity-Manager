@@ -1,0 +1,174 @@
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    line-height: 1.6;
+    color: #333;
+    background-color: #f5f5f5;
+}
+
+.container {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+.screen {
+    background-color: white;
+    border-radius: 10px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    padding: 30px;
+    margin-bottom: 20px;
+}
+
+.hidden {
+    display: none;
+}
+
+h1 {
+    margin-bottom: 20px;
+    color: #2c3e50;
+    text-align: center;
+}
+
+h2 {
+    margin: 15px 0;
+    color: #2c3e50;
+}
+
+button {
+    cursor: pointer;
+    border: none;
+    border-radius: 5px;
+    padding: 10px 20px;
+    font-size: 16px;
+    transition: background-color 0.3s;
+}
+
+.primary-button {
+    background-color: #3498db;
+    color: white;
+}
+
+.primary-button:hover {
+    background-color: #2980b9;
+}
+
+.secondary-button {
+    background-color: #ecf0f1;
+    color: #7f8c8d;
+}
+
+.secondary-button:hover {
+    background-color: #bdc3c7;
+}
+
+.controls {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 20px;
+}
+
+input {
+    width: 100%;
+    padding: 10px;
+    margin: 10px 0;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    font-size: 16px;
+}
+
+.info {
+    font-size: 14px;
+    color: #7f8c8d;
+    margin-top: 20px;
+}
+
+#login-button {
+    width: 100%;
+    background-color: #3498db;
+    color: white;
+}
+
+.status {
+    padding: 15px;
+    background-color: #f9f9f9;
+    border-radius: 5px;
+    margin: 15px 0;
+    text-align: center;
+}
+
+.text-box {
+    background-color: #f9f9f9;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    padding: 15px;
+    margin: 10px 0;
+    min-height: 100px;
+}
+
+.tasks-list {
+    margin: 15px 0;
+}
+
+.task-item {
+    background-color: #f9f9f9;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    padding: 15px;
+    margin-bottom: 10px;
+}
+
+.task-item h3 {
+    color: #2c3e50;
+    margin-bottom: 5px;
+}
+
+.task-metadata {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 10px;
+    font-size: 14px;
+}
+
+.task-metadata span {
+    background-color: #e0e0e0;
+    padding: 3px 8px;
+    border-radius: 3px;
+}
+
+#copy-button {
+    margin-top: 15px;
+}
+
+@media (max-width: 768px) {
+    .container {
+        padding: 10px;
+    }
+    
+    .screen {
+        padding: 15px;
+    }
+}
+
+.recording {
+    background-color: #e74c3c;
+    animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+    0% {
+        box-shadow: 0 0 0 0 rgba(231, 76, 60, 0.4);
+    }
+    70% {
+        box-shadow: 0 0 0 10px rgba(231, 76, 60, 0);
+    }
+    100% {
+        box-shadow: 0 0 0 0 rgba(231, 76, 60, 0);
+    }
+} 
