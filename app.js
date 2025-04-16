@@ -1,3 +1,15 @@
+// App State
+let isRecording = false;
+let mediaRecorder = null;
+let audioChunks = [];
+let apiKey = '';
+let allTasks = []; // Store all tasks
+
+// Check for page refresh
+if (window.isPageRefreshed || performance.navigation.type === 1) {
+    console.log('Page refresh detected. Initializing in clean state mode.');
+}
+
 // Onetime initialization function
 function initApp() {
     console.log('Initializing app...');
@@ -94,13 +106,6 @@ if (document.readyState === 'loading') {
     // DOM already loaded
     initApp();
 }
-
-// App State
-let isRecording = false;
-let mediaRecorder = null;
-let audioChunks = [];
-let apiKey = '';
-let allTasks = []; // Store all tasks
 
 // Setup all event listeners
 function setupEventListeners() {
@@ -318,83 +323,167 @@ async function toggleRecording() {
         // Start recording
         try {
             console.log('Attempting to start recording...');
-            // Improved audio settings for better quality
-            const stream = await navigator.mediaDevices.getUserMedia({
-                audio: {
-                    echoCancellation: true,
-                    noiseSuppression: true,
-                    autoGainControl: true,
-                    sampleRate: 48000,
-                    channelCount: 1
-                }
-            });
             
-            console.log('Microphone access granted');
+            // Request microphone permissions explicitly first
+            console.log('Checking for microphone permissions...');
             
-            // Try preferred options with fallbacks for browser compatibility
-            let options = {};
-            
-            // Test for supported mimeTypes
-            const mimeTypes = [
-                'audio/webm;codecs=opus',
-                'audio/webm',
-                'audio/ogg;codecs=opus',
-                'audio/mp4'
-            ];
-            
-            for (const type of mimeTypes) {
-                if (MediaRecorder.isTypeSupported(type)) {
-                    options.mimeType = type;
-                    break;
-                }
-            }
-            
-            // Add bitrate if supported
             try {
-                options.audioBitsPerSecond = 128000;
-                mediaRecorder = new MediaRecorder(stream, options);
-            } catch (e) {
-                console.warn('Advanced audio options not supported, using defaults');
-                mediaRecorder = new MediaRecorder(stream);
+                // Show message to user that we're requesting permissions
+                if (statusElement) {
+                    statusElement.textContent = preferDutch ? 
+                        'Microfoon toegang aanvragen...' : 
+                        'Requesting microphone access...';
+                }
+                
+                // Improved audio settings for better quality
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    audio: {
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        autoGainControl: true,
+                        sampleRate: 48000,
+                        channelCount: 1
+                    }
+                });
+                
+                console.log('Microphone access granted');
+                
+                // Try preferred options with fallbacks for browser compatibility
+                let options = {};
+                
+                // Test for supported mimeTypes
+                const mimeTypes = [
+                    'audio/webm;codecs=opus',
+                    'audio/webm',
+                    'audio/ogg;codecs=opus',
+                    'audio/mp4'
+                ];
+                
+                let supportedType = '';
+                for (const type of mimeTypes) {
+                    if (MediaRecorder.isTypeSupported(type)) {
+                        supportedType = type;
+                        options.mimeType = type;
+                        break;
+                    }
+                }
+                
+                console.log('Using media type:', supportedType || 'default');
+                
+                // Add bitrate if supported
+                try {
+                    options.audioBitsPerSecond = 128000;
+                    mediaRecorder = new MediaRecorder(stream, options);
+                    console.log('MediaRecorder created with options:', options);
+                } catch (e) {
+                    console.warn('Advanced audio options not supported, using defaults', e);
+                    mediaRecorder = new MediaRecorder(stream);
+                    console.log('MediaRecorder created with default options');
+                }
+                
+                audioChunks = [];
+                
+                mediaRecorder.addEventListener('dataavailable', event => {
+                    console.log('Audio data available, size:', event.data.size);
+                    audioChunks.push(event.data);
+                });
+                
+                mediaRecorder.addEventListener('start', () => {
+                    console.log('MediaRecorder started successfully');
+                });
+                
+                mediaRecorder.addEventListener('stop', async () => {
+                    console.log('MediaRecorder stopped, processing chunks...');
+                    recordButton.disabled = true;
+                    statusElement.textContent = preferDutch ? 'Audio verwerken...' : 'Processing audio...';
+                    await processAudio();
+                    recordButton.disabled = false;
+                });
+                
+                mediaRecorder.addEventListener('error', (e) => {
+                    console.error('MediaRecorder error:', e);
+                    statusElement.textContent = preferDutch ? 
+                        `Opname fout: ${e.message}` : 
+                        `Recording error: ${e.message}`;
+                });
+                
+                console.log('Starting MediaRecorder...');
+                mediaRecorder.start();
+                isRecording = true;
+                recordButton.textContent = preferDutch ? 'Stop Opname' : 'Stop Recording';
+                recordButton.classList.add('recording');
+                statusElement.textContent = preferDutch ? 
+                    'Opname... Spreek duidelijk in je microfoon' : 
+                    'Recording... Speak clearly into your microphone';
+                    
+                console.log('Recording started successfully');
+                
+            } catch (permissionError) {
+                console.error('Microphone permission error:', permissionError);
+                
+                // Check if this was a permission error
+                if (permissionError.name === 'NotAllowedError' || 
+                    permissionError.name === 'PermissionDeniedError') {
+                    
+                    statusElement.textContent = preferDutch ? 
+                        'Geen toegang tot microfoon - controleer browser toestemmingen' : 
+                        'No microphone access - check browser permissions';
+                        
+                    // Create a helpful message for the user
+                    const helpMessage = document.createElement('div');
+                    helpMessage.style.backgroundColor = '#ffe8e8';
+                    helpMessage.style.padding = '15px';
+                    helpMessage.style.margin = '15px 0';
+                    helpMessage.style.borderRadius = '5px';
+                    helpMessage.style.border = '1px solid #d00';
+                    helpMessage.innerHTML = preferDutch ? 
+                        '<strong>Microfoon toegang geweigerd</strong><br>Ga naar je browser instellingen om microfoon toegang toe te staan voor deze site.' : 
+                        '<strong>Microphone access denied</strong><br>Please check your browser settings to allow microphone access for this site.';
+                    
+                    // Insert after the status message
+                    statusElement.parentNode.insertBefore(helpMessage, statusElement.nextSibling);
+                    
+                } else {
+                    statusElement.textContent = preferDutch ? 
+                        `Fout bij starten opname: ${permissionError.message}` : 
+                        `Error starting recording: ${permissionError.message}`;
+                }
             }
-            
-            audioChunks = [];
-            
-            mediaRecorder.addEventListener('dataavailable', event => {
-                audioChunks.push(event.data);
-            });
-            
-            mediaRecorder.addEventListener('stop', async () => {
-                recordButton.disabled = true;
-                statusElement.textContent = preferDutch ? 'Audio verwerken...' : 'Processing audio...';
-                await processAudio();
-                recordButton.disabled = false;
-            });
-            
-            mediaRecorder.start();
-            isRecording = true;
-            recordButton.textContent = preferDutch ? 'Stop Opname' : 'Stop Recording';
-            recordButton.classList.add('recording');
-            statusElement.textContent = preferDutch ? 
-                'Opname... Spreek duidelijk in je microfoon' : 
-                'Recording... Speak clearly into your microphone';
         } catch (error) {
-            console.error('Error accessing microphone:', error);
+            console.error('General error accessing microphone:', error);
             statusElement.textContent = preferDutch ? 
                 'Fout: Kon geen toegang krijgen tot de microfoon' : 
                 'Error: Could not access microphone';
         }
     } else {
         // Stop recording
-        mediaRecorder.stop();
-        isRecording = false;
-        recordButton.textContent = preferDutch ? 'Start Opname' : 'Start Recording';
-        recordButton.classList.remove('recording');
-        statusElement.textContent = preferDutch ? 'Verwerken...' : 'Processing...';
-        
-        // Stop all tracks on the stream
-        if (mediaRecorder && mediaRecorder.stream) {
-            mediaRecorder.stream.getTracks().forEach(track => track.stop());
+        console.log('Stopping recording...');
+        try {
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                mediaRecorder.stop();
+                console.log('MediaRecorder stopped');
+            } else {
+                console.warn('MediaRecorder not active when trying to stop');
+            }
+            
+            isRecording = false;
+            recordButton.textContent = preferDutch ? 'Start Opname' : 'Start Recording';
+            recordButton.classList.remove('recording');
+            statusElement.textContent = preferDutch ? 'Verwerken...' : 'Processing...';
+            
+            // Stop all tracks on the stream
+            if (mediaRecorder && mediaRecorder.stream) {
+                console.log('Stopping all media tracks...');
+                mediaRecorder.stream.getTracks().forEach(track => {
+                    console.log('Stopping track:', track.kind);
+                    track.stop();
+                });
+            }
+        } catch (stopError) {
+            console.error('Error stopping recording:', stopError);
+            statusElement.textContent = preferDutch ? 
+                `Fout bij stoppen opname: ${stopError.message}` : 
+                `Error stopping recording: ${stopError.message}`;
         }
     }
 }

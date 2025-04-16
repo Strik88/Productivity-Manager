@@ -3,6 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Cache busting tags -->
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <title>Striks Voice Task Manager</title>
     <link rel="stylesheet" href="styles.css">
     <!-- Add manifest link for PWA support -->
@@ -14,6 +18,14 @@
     
     <!-- Inline script voor login fallback -->
     <script>
+        // Handler die bij page refresh wordt uitgevoerd
+        if (performance.navigation.type === 1) {
+            // Pagina wordt ververst, cache clearen
+            console.log('Page is being refreshed. Clearing cache...');
+            localStorage.removeItem('tempDOMState');
+            sessionStorage.clear();
+        }
+        
         function handleLogin() {
             console.log('Inline login handler executed');
             const apiKeyInput = document.getElementById('api-key-input');
@@ -62,6 +74,12 @@
         
         // Voeg een marker toe om te voorkomen dat de app.js code probeert buttons toe te voegen
         window.domIsFullyLoaded = true;
+        
+        // Force a clean state on refresh
+        if (performance.navigation.type === 1) {
+            console.log('Page was refreshed - forcing clean state');
+            window.isPageRefreshed = true;
+        }
     });
     </script>
     
