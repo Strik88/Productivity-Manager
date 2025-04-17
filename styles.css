@@ -293,6 +293,32 @@ input {
     .screen {
         padding: 15px;
     }
+    
+    .controls {
+        flex-direction: column;
+    }
+    
+    .controls .primary-button {
+        margin-bottom: 10px;
+    }
+    
+    .button-group {
+        display: flex;
+        flex-direction: column;
+        width: 100%;
+    }
+    
+    .button-group button {
+        margin-right: 0 !important;
+        margin-bottom: 10px;
+        width: 100%;
+    }
+    
+    #copy-transcription-button,
+    #copy-button {
+        width: 100%;
+        margin-top: 10px;
+    }
 }
 
 .recording {
