@@ -125,6 +125,22 @@ input {
     color: white;
 }
 
+.remember-key-container {
+    display: flex;
+    align-items: center;
+    margin: 10px 0;
+}
+
+.remember-key-container input[type="checkbox"] {
+    width: auto;
+    margin-right: 10px;
+}
+
+.remember-key-container label {
+    font-size: 14px;
+    color: #333;
+}
+
 .status {
     padding: 15px;
     background-color: #f9f9f9;

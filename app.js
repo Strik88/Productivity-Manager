@@ -7,6 +7,7 @@ let allTasks = []; // Store all tasks
 let recordingTimer = null; // Timer voor maximale opnameduur
 const MAX_RECORDING_TIME = 5 * 60 * 1000; // 5 minuten in milliseconden
 let isDesktopBrowser = false; // Indicator voor desktop browser
+const API_KEY_STORAGE_DURATION = 30; // Aantal dagen om API key te bewaren
 
 // Check for page refresh
 if (window.isPageRefreshed || performance.navigation.type === 1) {
@@ -90,9 +91,40 @@ function initApp() {
     
     console.log('All UI elements were found successfully');
     
-    // Check localStorage for saved API key
-    const savedApiKey = localStorage.getItem('voiceTaskApiKey');
+    // Check for API key in verschillende opslag-types
+    let savedApiKey = null;
+    let shouldAutoLogin = false;
+    
+    // Eerst sessie storage checken (tijdelijk voor huidige sessie)
+    savedApiKey = sessionStorage.getItem('voiceTaskApiKey');
     if (savedApiKey) {
+        console.log('Found API key in session storage');
+        shouldAutoLogin = true;
+    } 
+    // Daarna localStorage met vervaldatum checken
+    else {
+        savedApiKey = localStorage.getItem('voiceTaskApiKey');
+        const expiryDate = localStorage.getItem('voiceTaskApiKeyExpiry');
+        
+        if (savedApiKey && expiryDate) {
+            // Controleer of de API key nog geldig is
+            const now = new Date();
+            const expiry = new Date(expiryDate);
+            
+            if (now < expiry) {
+                console.log(`Found valid API key in local storage (expires: ${expiry.toLocaleDateString()})`);
+                shouldAutoLogin = true;
+            } else {
+                console.log('API key in local storage has expired, removing');
+                localStorage.removeItem('voiceTaskApiKey');
+                localStorage.removeItem('voiceTaskApiKeyExpiry');
+                savedApiKey = null;
+            }
+        }
+    }
+    
+    // Auto login als er een geldige API key is gevonden
+    if (shouldAutoLogin && savedApiKey) {
         window.apiKey = savedApiKey;
         elements.loginScreen.classList.add('hidden');
         elements.appScreen.classList.remove('hidden');
@@ -151,7 +183,26 @@ function setupEventListeners() {
             if (inputKey && inputKey.startsWith('sk-')) {
                 console.log('Valid API key entered');
                 apiKey = inputKey;
-                localStorage.setItem('voiceTaskApiKey', apiKey);
+                
+                // Voeg checkbox toe voor langer bewaren (indien aanwezig)
+                const rememberKey = document.getElementById('remember-key');
+                const shouldRemember = rememberKey ? rememberKey.checked : false;
+                
+                // Bewaar API sleutel met vervaldatum als dat gewenst is
+                if (shouldRemember) {
+                    const expiryDate = new Date();
+                    expiryDate.setDate(expiryDate.getDate() + API_KEY_STORAGE_DURATION);
+                    localStorage.setItem('voiceTaskApiKey', apiKey);
+                    localStorage.setItem('voiceTaskApiKeyExpiry', expiryDate.toISOString());
+                    console.log(`API key will be stored until ${expiryDate.toLocaleDateString()}`);
+                } else {
+                    // Tijdelijke sessie-opslag als niet aangevinkt
+                    sessionStorage.setItem('voiceTaskApiKey', apiKey);
+                    localStorage.removeItem('voiceTaskApiKey');
+                    localStorage.removeItem('voiceTaskApiKeyExpiry');
+                    console.log('API key stored for current session only');
+                }
+                
                 loginScreen.classList.add('hidden');
                 appScreen.classList.remove('hidden');
                 
@@ -169,7 +220,10 @@ function setupEventListeners() {
     if (logoutButton) {
         logoutButton.addEventListener('click', () => {
             apiKey = '';
+            // Verwijder de API sleutel uit alle opslagtypes
             localStorage.removeItem('voiceTaskApiKey');
+            localStorage.removeItem('voiceTaskApiKeyExpiry');
+            sessionStorage.removeItem('voiceTaskApiKey');
             appScreen.classList.add('hidden');
             loginScreen.classList.remove('hidden');
             resetUI();
