@@ -3,7 +3,7 @@
   "name": "striks-voice-task-manager",
   "functions": {
     "api/notion.js": {
-      "runtime": "@vercel/node@18"
+      "runtime": "nodejs18.x"
     }
   },
   "rewrites": [
