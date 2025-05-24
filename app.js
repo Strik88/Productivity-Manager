@@ -9,9 +9,268 @@ const MAX_RECORDING_TIME = 5 * 60 * 1000; // 5 minuten in milliseconden
 let isDesktopBrowser = false; // Indicator voor desktop browser
 const API_KEY_STORAGE_DURATION = 30; // Aantal dagen om API key te bewaren
 
+<<<<<<< Updated upstream
 // Check for page refresh
 if (window.isPageRefreshed || performance.navigation.type === 1) {
     console.log('Page refresh detected. Initializing in clean state mode.');
+=======
+// === ENHANCED CREDENTIAL STORAGE SYSTEM ===
+class SecureCredentialManager {
+    constructor() {
+        this.dbName = 'VoiceTaskSecureDB';
+        this.dbVersion = 1;
+        this.storeName = 'credentials';
+        this.encryptionKey = this.generateDeviceKey();
+        this.db = null;
+    }
+
+    // Generate a device-specific encryption key
+    generateDeviceKey() {
+        const userAgent = navigator.userAgent;
+        const screenDimensions = `${screen.width}x${screen.height}`;
+        const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        const baseString = `${userAgent}-${screenDimensions}-${timezone}`;
+        
+        // Simple but effective device fingerprint
+        let hash = 0;
+        for (let i = 0; i < baseString.length; i++) {
+            const char = baseString.charCodeAt(i);
+            hash = ((hash << 5) - hash) + char;
+            hash = hash & hash; // Convert to 32-bit integer
+        }
+        return Math.abs(hash).toString(36);
+    }
+
+    // Simple XOR encryption (sufficient for local storage)
+    encrypt(text, key) {
+        let result = '';
+        for (let i = 0; i < text.length; i++) {
+            result += String.fromCharCode(text.charCodeAt(i) ^ key.charCodeAt(i % key.length));
+        }
+        return btoa(result); // Base64 encode
+    }
+
+    decrypt(encryptedText, key) {
+        try {
+            const decoded = atob(encryptedText); // Base64 decode
+            let result = '';
+            for (let i = 0; i < decoded.length; i++) {
+                result += String.fromCharCode(decoded.charCodeAt(i) ^ key.charCodeAt(i % key.length));
+            }
+            return result;
+        } catch (error) {
+            console.error('Decryption failed:', error);
+            return null;
+        }
+    }
+
+    // Initialize IndexedDB
+    async initDB() {
+        return new Promise((resolve, reject) => {
+            const request = indexedDB.open(this.dbName, this.dbVersion);
+            
+            request.onerror = () => reject(request.error);
+            request.onsuccess = () => {
+                this.db = request.result;
+                resolve(this.db);
+            };
+            
+            request.onupgradeneeded = (event) => {
+                const db = event.target.result;
+                if (!db.objectStoreNames.contains(this.storeName)) {
+                    const store = db.createObjectStore(this.storeName, { keyPath: 'id' });
+                    store.createIndex('type', 'type', { unique: false });
+                    store.createIndex('expiryDate', 'expiryDate', { unique: false });
+                }
+            };
+        });
+    }
+
+    // Store credentials securely
+    async storeCredentials(credentials) {
+        if (!this.db) await this.initDB();
+        
+        const transaction = this.db.transaction([this.storeName], 'readwrite');
+        const store = transaction.objectStore(this.storeName);
+        
+        const promises = [];
+        
+        // Store each credential type
+        Object.entries(credentials).forEach(([key, value]) => {
+            if (value && value.trim()) {
+                const encryptedValue = this.encrypt(value, this.encryptionKey);
+                const credentialData = {
+                    id: key,
+                    type: 'api_credential',
+                    value: encryptedValue,
+                    timestamp: Date.now(),
+                    expiryDate: Date.now() + (30 * 24 * 60 * 60 * 1000), // 30 days
+                    deviceKey: this.encryptionKey.substring(0, 8) // Partial key for validation
+                };
+                
+                promises.push(
+                    new Promise((resolve, reject) => {
+                        const request = store.put(credentialData);
+                        request.onsuccess = () => resolve();
+                        request.onerror = () => reject(request.error);
+                    })
+                );
+            }
+        });
+        
+        await Promise.all(promises);
+        
+        // Also store in localStorage as backup
+        this.storeInLocalStorageBackup(credentials);
+        
+        console.log('✅ Credentials stored securely in IndexedDB');
+    }
+
+    // Retrieve credentials securely
+    async retrieveCredentials() {
+        try {
+            if (!this.db) await this.initDB();
+            
+            const transaction = this.db.transaction([this.storeName], 'readonly');
+            const store = transaction.objectStore(this.storeName);
+            
+            const credentials = {};
+            const credentialKeys = ['openaiApiKey', 'notionApiKey', 'notionDatabaseId'];
+            
+            const promises = credentialKeys.map(key => 
+                new Promise((resolve) => {
+                    const request = store.get(key);
+                    request.onsuccess = () => {
+                        const result = request.result;
+                        if (result && result.expiryDate > Date.now()) {
+                            // Verify device key matches
+                            if (result.deviceKey === this.encryptionKey.substring(0, 8)) {
+                                const decryptedValue = this.decrypt(result.value, this.encryptionKey);
+                                if (decryptedValue) {
+                                    credentials[key] = decryptedValue;
+                                }
+                            }
+                        }
+                        resolve();
+                    };
+                    request.onerror = () => resolve(); // Continue on error
+                })
+            );
+            
+            await Promise.all(promises);
+            
+            // Fallback to localStorage if IndexedDB fails
+            if (Object.keys(credentials).length === 0) {
+                console.log('🔄 Falling back to localStorage');
+                return this.retrieveFromLocalStorageBackup();
+            }
+            
+            console.log('✅ Credentials retrieved from IndexedDB');
+            return credentials;
+            
+        } catch (error) {
+            console.error('IndexedDB retrieval failed, using localStorage fallback:', error);
+            return this.retrieveFromLocalStorageBackup();
+        }
+    }
+
+    // Clean expired credentials
+    async cleanExpiredCredentials() {
+        if (!this.db) await this.initDB();
+        
+        const transaction = this.db.transaction([this.storeName], 'readwrite');
+        const store = transaction.objectStore(this.storeName);
+        const index = store.index('expiryDate');
+        
+        const now = Date.now();
+        const range = IDBKeyRange.upperBound(now);
+        
+        const request = index.openCursor(range);
+        request.onsuccess = (event) => {
+            const cursor = event.target.result;
+            if (cursor) {
+                cursor.delete();
+                cursor.continue();
+            }
+        };
+    }
+
+    // localStorage backup methods
+    storeInLocalStorageBackup(credentials) {
+        try {
+            Object.entries(credentials).forEach(([key, value]) => {
+                if (value && value.trim()) {
+                    const encryptedValue = this.encrypt(value, this.encryptionKey);
+                    const data = {
+                        value: encryptedValue,
+                        timestamp: Date.now(),
+                        expiryDate: Date.now() + (30 * 24 * 60 * 60 * 1000)
+                    };
+                    localStorage.setItem(`secure_${key}`, JSON.stringify(data));
+                }
+            });
+        } catch (error) {
+            console.error('localStorage backup failed:', error);
+        }
+    }
+
+    retrieveFromLocalStorageBackup() {
+        const credentials = {};
+        const credentialKeys = ['openaiApiKey', 'notionApiKey', 'notionDatabaseId'];
+        
+        credentialKeys.forEach(key => {
+            try {
+                const stored = localStorage.getItem(`secure_${key}`);
+                if (stored) {
+                    const data = JSON.parse(stored);
+                    if (data.expiryDate > Date.now()) {
+                        const decryptedValue = this.decrypt(data.value, this.encryptionKey);
+                        if (decryptedValue) {
+                            credentials[key] = decryptedValue;
+                        }
+            } else {
+                        localStorage.removeItem(`secure_${key}`);
+                    }
+                }
+            } catch (error) {
+                console.error(`Failed to retrieve ${key} from localStorage:`, error);
+            }
+        });
+        
+        return credentials;
+    }
+
+    // Clear all stored credentials
+    async clearAllCredentials() {
+        // Clear IndexedDB
+        if (this.db) {
+            const transaction = this.db.transaction([this.storeName], 'readwrite');
+            const store = transaction.objectStore(this.storeName);
+            await new Promise((resolve) => {
+                const request = store.clear();
+                request.onsuccess = () => resolve();
+                request.onerror = () => resolve();
+            });
+        }
+        
+        // Clear localStorage backup
+        ['openaiApiKey', 'notionApiKey', 'notionDatabaseId'].forEach(key => {
+            localStorage.removeItem(`secure_${key}`);
+        });
+        
+        // Clear legacy storage
+                localStorage.removeItem('voiceTaskApiKey');
+                localStorage.removeItem('voiceTaskApiKeyExpiry');
+        sessionStorage.removeItem('voiceTaskApiKey');
+        localStorage.removeItem('voiceTaskNotionApiKey');
+        localStorage.removeItem('voiceTaskNotionDatabaseId');
+        localStorage.removeItem('voiceTaskNotionCredentialsExpiry');
+        sessionStorage.removeItem('voiceTaskNotionApiKey');
+        sessionStorage.removeItem('voiceTaskNotionDatabaseId');
+        
+        console.log('🗑️ All credentials cleared');
+    }
+>>>>>>> Stashed changes
 }
 
 // Onetime initialization function
@@ -60,6 +319,7 @@ function initApp() {
     if (!allElementsFound) {
         console.error('Missing elements:', missingElements.join(', '));
         
+<<<<<<< Updated upstream
         // Show error message on page
         const errorMessage = document.createElement('div');
         errorMessage.style.color = 'red';
@@ -122,6 +382,172 @@ function initApp() {
             }
         }
     }
+=======
+        const messageChannel = new MessageChannel();
+        messageChannel.port1.onmessage = (event) => {
+            const { success, credentials, error } = event.data;
+            if (success) {
+                resolve(credentials || {});
+} else {
+                console.error('Service Worker credential restore error:', error);
+                resolve({});
+            }
+        };
+        
+        navigator.serviceWorker.controller.postMessage({
+            type: 'RESTORE_CREDENTIALS'
+        }, [messageChannel.port2]);
+    });
+}
+
+// === CREDENTIAL PERSISTENCE STATUS CHECKER ===
+class CredentialStatusChecker {
+    constructor() {
+        this.statusElements = {
+            indexeddb: document.getElementById('indexeddb-status'),
+            serviceworker: document.getElementById('serviceworker-status'),
+            localstorage: document.getElementById('localstorage-status'),
+            android: document.getElementById('android-optimization')
+        };
+    }
+
+    // Check all credential persistence methods
+    async checkAllStatus() {
+        await Promise.all([
+            this.checkIndexedDBStatus(),
+            this.checkServiceWorkerStatus(),
+            this.checkLocalStorageStatus(),
+            this.checkAndroidOptimization()
+        ]);
+    }
+
+    // Update status item visual state
+    updateStatusItem(element, status, icon, text) {
+        if (!element) return;
+        
+        const iconSpan = element.querySelector('.status-icon');
+        const textSpan = element.querySelector('.status-text');
+        
+        if (iconSpan) iconSpan.textContent = icon;
+        if (textSpan && text) textSpan.textContent = text;
+        
+        // Update CSS classes
+        element.classList.remove('active', 'limited', 'disabled', 'pending');
+        element.classList.add(status);
+    }
+
+    // Check IndexedDB functionality
+    async checkIndexedDBStatus() {
+        try {
+            if (!window.indexedDB) {
+                this.updateStatusItem(this.statusElements.indexeddb, 'disabled', '❌', 'IndexedDB Versleuteling (Niet ondersteund)');
+        return;
+    }
+    
+            // Test IndexedDB creation
+            const testDB = await new Promise((resolve, reject) => {
+                const request = indexedDB.open('test-db', 1);
+                request.onerror = () => reject(request.error);
+                request.onsuccess = () => resolve(request.result);
+                request.onupgradeneeded = (event) => {
+                    const db = event.target.result;
+                    if (!db.objectStoreNames.contains('test')) {
+                        db.createObjectStore('test', { keyPath: 'id' });
+                    }
+                };
+            });
+
+            testDB.close();
+            
+            // Clean up test database
+            indexedDB.deleteDatabase('test-db');
+            
+            this.updateStatusItem(this.statusElements.indexeddb, 'active', '✅', 'IndexedDB Versleuteling');
+            
+        } catch (error) {
+            console.error('IndexedDB check failed:', error);
+            this.updateStatusItem(this.statusElements.indexeddb, 'disabled', '❌', 'IndexedDB Versleuteling (Fout)');
+        }
+    }
+
+    // Check Service Worker functionality
+    async checkServiceWorkerStatus() {
+        try {
+            if (!('serviceWorker' in navigator)) {
+                this.updateStatusItem(this.statusElements.serviceworker, 'disabled', '❌', 'Service Worker Backup (Niet ondersteund)');
+                return;
+            }
+
+            const registration = await navigator.serviceWorker.getRegistration();
+            if (registration && registration.active) {
+                this.updateStatusItem(this.statusElements.serviceworker, 'active', '✅', 'Service Worker Backup');
+                } else {
+                this.updateStatusItem(this.statusElements.serviceworker, 'limited', '⚠️', 'Service Worker Backup (Registratie)');
+            }
+            
+        } catch (error) {
+            console.error('Service Worker check failed:', error);
+            this.updateStatusItem(this.statusElements.serviceworker, 'disabled', '❌', 'Service Worker Backup (Fout)');
+        }
+    }
+
+    // Check localStorage functionality
+    checkLocalStorageStatus() {
+        try {
+            if (!window.localStorage) {
+                this.updateStatusItem(this.statusElements.localstorage, 'disabled', '❌', 'LocalStorage Fallback (Niet ondersteund)');
+                return;
+            }
+
+            // Test localStorage read/write
+            const testKey = 'test-storage-key';
+            const testValue = 'test-value';
+            
+            localStorage.setItem(testKey, testValue);
+            const retrieved = localStorage.getItem(testKey);
+            localStorage.removeItem(testKey);
+            
+            if (retrieved === testValue) {
+                this.updateStatusItem(this.statusElements.localstorage, 'active', '✅', 'LocalStorage Fallback');
+            } else {
+                this.updateStatusItem(this.statusElements.localstorage, 'limited', '⚠️', 'LocalStorage Fallback (Beperkt)');
+            }
+            
+        } catch (error) {
+            console.error('localStorage check failed:', error);
+            this.updateStatusItem(this.statusElements.localstorage, 'disabled', '❌', 'LocalStorage Fallback (Fout)');
+        }
+    }
+
+    // Check Android PWA optimization
+    checkAndroidOptimization() {
+        const isAndroid = /Android/i.test(navigator.userAgent);
+        const isPWA = window.matchMedia('(display-mode: standalone)').matches || 
+                     window.navigator.standalone === true;
+        const supportsBackgroundSync = 'serviceWorker' in navigator && 'sync' in window.ServiceWorkerRegistration.prototype;
+        
+        if (isAndroid && isPWA && supportsBackgroundSync) {
+            this.updateStatusItem(this.statusElements.android, 'active', '✅', 'Android PWA Optimalisatie');
+        } else if (isAndroid) {
+            if (isPWA) {
+                this.updateStatusItem(this.statusElements.android, 'limited', '⚠️', 'Android PWA (Beperkte sync)');
+            } else {
+                this.updateStatusItem(this.statusElements.android, 'limited', '⚠️', 'Android Browser (Installeer als app)');
+            }
+        } else {
+            this.updateStatusItem(this.statusElements.android, 'active', '💻', 'Desktop Optimalisatie');
+        }
+    }
+}
+
+// Initialize credential status checker
+const credentialStatusChecker = new CredentialStatusChecker();
+
+// Add event listener to update status when settings panel opens
+document.addEventListener('DOMContentLoaded', async () => {
+    // Initialize the settings panel
+    initializeSettingsPanel();
+>>>>>>> Stashed changes
     
     // Auto login als er een geldige API key is gevonden
     if (shouldAutoLogin && savedApiKey) {
@@ -162,6 +588,7 @@ function setupEventListeners() {
         console.error('Cannot set up event listeners - missing elements:', missingElements.join(', '));
         return;
     }
+<<<<<<< Updated upstream
     
     console.log('All required elements found for event listeners');
     
@@ -217,6 +644,10 @@ function setupEventListeners() {
         console.error('Login button not found, cannot add click event listener');
     }
 
+=======
+
+    // Logout button event listener
+>>>>>>> Stashed changes
     if (logoutButton) {
         logoutButton.addEventListener('click', () => {
             apiKey = '';
@@ -328,7 +759,11 @@ function setupEventListeners() {
     if (copyTranscriptionButton) {
         copyTranscriptionButton.addEventListener('click', () => {
             const transcriptionText = transcriptionElement.textContent;
+<<<<<<< Updated upstream
             
+=======
+            if (transcriptionText) {
+>>>>>>> Stashed changes
             navigator.clipboard.writeText(transcriptionText)
                 .then(() => {
                     const originalText = copyTranscriptionButton.textContent;
@@ -341,6 +776,10 @@ function setupEventListeners() {
                     console.error('Failed to copy transcription: ', err);
                     alert('Kon transcriptie niet naar klembord kopiëren');
                 });
+<<<<<<< Updated upstream
+=======
+            }
+>>>>>>> Stashed changes
         });
     } else {
         console.error('Copy transcription button not found, cannot add click event listener');
@@ -439,7 +878,11 @@ function checkBrowserType() {
 async function testAudioInput() {
     console.log('Testing audio input capabilities...');
     try {
+<<<<<<< Updated upstream
         // Controleer eerst of we toegang hebben tot de microfoon
+=======
+        // Request microphone access
+>>>>>>> Stashed changes
         const stream = await navigator.mediaDevices.getUserMedia({
             audio: {
                 echoCancellation: true,
@@ -448,6 +891,7 @@ async function testAudioInput() {
             }
         });
         
+<<<<<<< Updated upstream
         console.log('Microphone access granted for test');
         
         // Controleer of we daadwerkelijk audio-tracks hebben
@@ -521,14 +965,53 @@ async function testAudioInput() {
                 console.error('Error during advanced audio test:', audioTestError);
                 // Stop de tracks bij een fout
                 stream.getTracks().forEach(track => track.stop());
+=======
+        // Setup MediaRecorder
+                let options = {};
+        if (MediaRecorder.isTypeSupported('audio/webm')) {
+            options.mimeType = 'audio/webm';
+        } else if (MediaRecorder.isTypeSupported('audio/mp4')) {
+            options.mimeType = 'audio/mp4';
+        }
+        
+                    mediaRecorder = new MediaRecorder(stream, options);
+                audioChunks = [];
+                
+                mediaRecorder.addEventListener('dataavailable', event => {
+                    if (event.data.size > 0) {
+                        audioChunks.push(event.data);
+>>>>>>> Stashed changes
             }
         } else {
             console.warn('No audio tracks found in test stream');
             // Stop de stream omdat we hem niet nodig hebben
             stream.getTracks().forEach(track => track.stop());
+<<<<<<< Updated upstream
         }
     } catch (err) {
         console.error('Microphone test failed:', err);
+=======
+            processAudio();
+        });
+        
+        mediaRecorder.start();
+                isRecording = true;
+        
+        recordButton.textContent = 'Stop Opname';
+                recordButton.classList.add('recording');
+        statusElement.textContent = 'Opname gestart... Spreek nu je taken in';
+                    
+        // Auto-stop after 5 minutes
+                recordingTimer = setTimeout(() => {
+            if (isRecording) {
+                stopRecording();
+                    }
+                }, MAX_RECORDING_TIME);
+                    
+        } catch (error) {
+        console.error('Error starting recording:', error);
+        statusElement.textContent = 'Fout bij starten opname. Controleer microfoon toegang.';
+>>>>>>> Stashed changes
     }
 }
 
@@ -538,6 +1021,7 @@ async function toggleRecording() {
     console.log('Current recording state:', isRecording);
     console.log('Running on desktop browser:', isDesktopBrowser);
     
+<<<<<<< Updated upstream
     // Default to Dutch for Striks branding
     const preferDutch = true;
                      
@@ -815,6 +1299,19 @@ async function toggleRecording() {
             statusElement.textContent = preferDutch ? 
                 `Fout bij stoppen opname: ${stopError.message}` : 
                 `Error stopping recording: ${stopError.message}`;
+=======
+    if (mediaRecorder && isRecording) {
+        mediaRecorder.stop();
+        isRecording = false;
+        
+        recordButton.textContent = 'Start Opname';
+        recordButton.classList.remove('recording');
+        statusElement.textContent = 'Opname gestopt. Audio wordt verwerkt...';
+        
+            if (recordingTimer) {
+                clearTimeout(recordingTimer);
+                recordingTimer = null;
+>>>>>>> Stashed changes
         }
     }
 }
@@ -888,11 +1385,16 @@ async function processAudio() {
         
         console.log('Initiating fetch request to Whisper API with API key starting with:', apiKey.substring(0, 15) + '...');
         
+<<<<<<< Updated upstream
+=======
+        try {
+>>>>>>> Stashed changes
         const transcriptionResponse = await fetch('https://api.openai.com/v1/audio/transcriptions', {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${apiKey}`
             },
+<<<<<<< Updated upstream
             body: formData
         });
         
@@ -921,11 +1423,50 @@ async function processAudio() {
                     
         const transcriptionText = await transcriptionResponse.text();
         console.log('Raw response text:', transcriptionText.substring(0, 500) + (transcriptionText.length > 500 ? '...' : ''));
+=======
+                body: formData,
+                signal: controller.signal
+            });
+            
+            clearTimeout(timeoutId);
+            console.log('=== WHISPER API RESPONSE RECEIVED ===');
+            console.log('Response status:', transcriptionResponse.status);
+            console.log('Response headers:', Object.fromEntries([...transcriptionResponse.headers.entries()]));
+        
+        if (!transcriptionResponse.ok) {
+            const errorText = await transcriptionResponse.text();
+                console.error('Whisper API error response:', errorText);
+                
+                // Specifieke foutmeldingen
+                if (transcriptionResponse.status === 401) {
+                    throw new Error('API key is ongeldig. Controleer je OpenAI API key.');
+                } else if (transcriptionResponse.status === 429) {
+                    throw new Error('API quota overschreden. Probeer later opnieuw.');
+                } else if (transcriptionResponse.status === 413) {
+                    throw new Error('Audio bestand te groot. Maak een kortere opname.');
+                }
+            
+            try {
+                const errorData = JSON.parse(errorText);
+                    console.error('Parsed error data:', errorData);
+                throw new Error(`API Error: ${errorData.error?.message || 'Unknown error'}`);
+            } catch (jsonError) {
+                    throw new Error(`API Error (${transcriptionResponse.status}): ${errorText || 'Unknown error'}`);
+            }
+        }
+                    
+        const transcriptionText = await transcriptionResponse.text();
+            console.log('Raw transcription response:', transcriptionText.substring(0, 500) + (transcriptionText.length > 500 ? '...' : ''));
+>>>>>>> Stashed changes
         
         let transcriptionData;
         try {
             transcriptionData = JSON.parse(transcriptionText);
+<<<<<<< Updated upstream
             console.log('Whisper API response data:', transcriptionData);
+=======
+                console.log('Parsed transcription data:', transcriptionData);
+>>>>>>> Stashed changes
         } catch (jsonError) {
             console.error('Error parsing JSON from Whisper API response:', jsonError);
             throw new Error('Kon de API-respons niet verwerken (JSON parsing error)');
@@ -937,17 +1478,35 @@ async function processAudio() {
         }
         
         const transcribedText = transcriptionData.text;
+<<<<<<< Updated upstream
+=======
+            console.log('=== TRANSCRIPTION SUCCESSFUL ===');
+>>>>>>> Stashed changes
         console.log('Transcribed text:', transcribedText);
         
         // Display transcription
         transcriptionContainer.classList.remove('hidden');
         transcriptionElement.textContent = transcribedText;
         
+<<<<<<< Updated upstream
+=======
+            // Show copy transcription button
+            if (copyTranscriptionButton) {
+                copyTranscriptionButton.classList.remove('hidden');
+            }
+            
+            // Continue with rest of processing...
+>>>>>>> Stashed changes
         // Detect if the transcribed text is in Dutch
         const isDutchText = detectDutchLanguage(transcribedText);
         
         // Now, process the transcription using GPT to extract tasks
         statusElement.textContent = preferDutch ? 'Taken extraheren...' : 'Extracting tasks...';
+<<<<<<< Updated upstream
+=======
+            
+            console.log('=== STARTING GPT CHAT COMPLETION ===');
+>>>>>>> Stashed changes
         
         const chatResponse = await fetch('https://api.openai.com/v1/chat/completions', {
             method: 'POST',
@@ -1001,10 +1560,116 @@ Return tasks as a valid JSON array with no extra text.`
                 temperature: 0.3 // Lower temperature for more consistent, focused responses
             })
         });
+<<<<<<< Updated upstream
         
         if (!chatResponse.ok) {
             const errorData = await chatResponse.json();
             throw new Error(`API Error: ${errorData.error?.message || 'Unknown error'}`);
+=======
+
+            console.log('GPT Chat response status:', chatResponse.status);
+        
+        if (!chatResponse.ok) {
+            const errorData = await chatResponse.json();
+                console.error('GPT Chat error:', errorData);
+            throw new Error(`API Error: ${errorData.error?.message || 'Unknown error'}`);
+        }
+        
+        const chatData = await chatResponse.json();
+            console.log('GPT Chat response received:', chatData);
+
+        let tasksArray = [];
+        
+        try {
+            // Parse the response to extract the tasks
+            const content = chatData.choices[0].message.content.trim();
+                console.log('GPT response content:', content);
+                
+            // Attempt to extract JSON if it's wrapped in markdown code blocks
+            const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)\s*```/) || content.match(/\[([\s\S]*)\]/);
+            const jsonString = jsonMatch ? jsonMatch[1] : content;
+                console.log('Extracted JSON string:', jsonString);
+                
+            tasksArray = JSON.parse(jsonString.includes('[') ? jsonString : `[${jsonString}]`);
+                console.log('Parsed tasks array:', tasksArray);
+        } catch (parseError) {
+            console.error('Error parsing tasks:', parseError);
+            throw new Error('Failed to parse tasks from AI response');
+        }
+        
+        // Add timestamp to each task
+        tasksArray = tasksArray.map(task => ({
+            ...task,
+            timestamp: new Date().toISOString()
+        }));
+
+            console.log('=== TASKS EXTRACTED SUCCESSFULLY ===');
+            console.log('Final tasks array:', tasksArray);
+        
+        // Add the new tasks to our storage
+        allTasks = [...allTasks, ...tasksArray];
+        saveTasks();
+
+            // After successfully extracting tasks and before displaying them
+            if (notionApiKey && notionDatabaseId) {
+                try {
+                    statusElement.textContent = preferDutch ? 
+                        'Taken toevoegen aan Notion...' : 
+                        'Adding tasks to Notion...';
+                    
+                    console.log('=== STARTING NOTION SYNC ===');
+                    await addTasksToNotion(tasksArray);
+                    console.log('=== NOTION SYNC SUCCESSFUL ===');
+                    
+                    // Show success message
+                    const successMessage = document.createElement('div');
+                    successMessage.className = 'status-message success';
+                    successMessage.textContent = preferDutch ? 
+                        `${tasksArray.length} taken succesvol toegevoegd aan Notion!` : 
+                        `Successfully added ${tasksArray.length} tasks to Notion!`;
+                    statusElement.parentNode.insertBefore(successMessage, statusElement.nextSibling);
+                    
+                    // Remove success message after 5 seconds
+                    setTimeout(() => {
+                        successMessage.remove();
+                    }, 5000);
+                } catch (notionError) {
+                    console.error('=== NOTION SYNC ERROR ===');
+                    console.error('Notion error details:', notionError);
+                    
+                    // Show error message
+                    const errorMessage = document.createElement('div');
+                    errorMessage.className = 'status-message error';
+                    errorMessage.textContent = preferDutch ? 
+                        `Fout bij toevoegen aan Notion: ${notionError.message}` : 
+                        `Error adding to Notion: ${notionError.message}`;
+                    statusElement.parentNode.insertBefore(errorMessage, statusElement.nextSibling);
+                    
+                    // Remove error message after 5 seconds
+                    setTimeout(() => {
+                        errorMessage.remove();
+                    }, 5000);
+                }
+            }
+        
+        // Display all tasks
+        displayTasks(allTasks);
+        statusElement.textContent = preferDutch ? 
+            'Klaar om nieuwe taken op te nemen' : 
+            'Ready to record new tasks';
+            
+        } catch (fetchError) {
+            clearTimeout(timeoutId);
+            if (fetchError.name === 'AbortError') {
+                console.error('Whisper API request was aborted due to timeout');
+                statusElement.textContent = preferDutch ? 
+                    'Timeout: Probeer een kortere opname of controleer je internetverbinding' : 
+                    'Timeout: Try a shorter recording or check your internet connection';
+            } else {
+                console.error('Network error during Whisper API call:', fetchError);
+                throw fetchError;
+            }
+>>>>>>> Stashed changes
         }
         
         const chatData = await chatResponse.json();
@@ -1179,4 +1844,1011 @@ function resetUI() {
             recordButton.classList.remove('recording');
         }
     }
+<<<<<<< Updated upstream
 } 
+=======
+} 
+
+// Function to load saved Notion credentials
+function loadNotionCredentials() {
+    let savedNotionKey = sessionStorage.getItem('voiceTaskNotionApiKey');
+    let savedNotionDbId = sessionStorage.getItem('voiceTaskNotionDatabaseId');
+
+    if (savedNotionKey && savedNotionDbId) {
+        console.log('Found Notion credentials in session storage');
+        notionApiKey = savedNotionKey;
+        notionDatabaseId = savedNotionDbId;
+    } else {
+        savedNotionKey = localStorage.getItem('voiceTaskNotionApiKey');
+        savedNotionDbId = localStorage.getItem('voiceTaskNotionDatabaseId');
+        const expiryDate = localStorage.getItem('voiceTaskNotionCredentialsExpiry');
+
+        if (savedNotionKey && savedNotionDbId && expiryDate) {
+            const now = new Date();
+            const expiry = new Date(expiryDate);
+
+            if (now < expiry) {
+                console.log(`Found valid Notion credentials in local storage (expires: ${expiry.toLocaleDateString()})`);
+                notionApiKey = savedNotionKey;
+                notionDatabaseId = savedNotionDbId;
+            } else {
+                console.log('Notion credentials in local storage have expired, removing');
+                localStorage.removeItem('voiceTaskNotionApiKey');
+                localStorage.removeItem('voiceTaskNotionDatabaseId');
+                localStorage.removeItem('voiceTaskNotionCredentialsExpiry');
+            }
+        }
+    }
+}
+
+// Function to save Notion credentials
+async function saveNotionCredentials() {
+    // This function is now handled by the settings panel
+    // Just load existing credentials if any
+    console.log('saveNotionCredentials called - credentials are now managed via settings panel');
+}
+
+// Function to populate the Notion field mapping UI
+function populateNotionMappingUI(schema) {
+    const mappingSection = document.getElementById('notion-mapping-section');
+    if (!mappingSection) {
+        console.error('Notion mapping section not found');
+        return;
+    }
+
+    // Show the mapping section
+    mappingSection.classList.remove('hidden');
+
+    // Get all select elements
+    const taskNameSelect = document.getElementById('map-notion-task-name');
+    const prioritySelect = document.getElementById('map-notion-priority');
+    const dueDateSelect = document.getElementById('map-notion-due-date');
+    const categorySelect = document.getElementById('map-notion-category');
+    const statusSelect = document.getElementById('map-notion-status');
+
+    // Clear existing options except the first one
+    [taskNameSelect, prioritySelect, dueDateSelect, categorySelect, statusSelect].forEach(select => {
+        if (select) {
+            while (select.options.length > 1) {
+                select.remove(1);
+            }
+        }
+    });
+
+    // Add options based on schema
+    Object.entries(schema).forEach(([propertyName, property]) => {
+        const option = document.createElement('option');
+        option.value = propertyName;
+        option.textContent = propertyName;
+        
+        // Add to appropriate select based on property type
+        switch (property.type) {
+            case 'title':
+                taskNameSelect?.appendChild(option.cloneNode(true));
+                break;
+            case 'select':
+                if (propertyName.toLowerCase().includes('priority') || 
+                    propertyName.toLowerCase().includes('prioriteit')) {
+                    prioritySelect?.appendChild(option.cloneNode(true));
+                } else if (propertyName.toLowerCase().includes('category') || 
+                         propertyName.toLowerCase().includes('categorie')) {
+                    categorySelect?.appendChild(option.cloneNode(true));
+                } else if (propertyName.toLowerCase().includes('status')) {
+                    statusSelect?.appendChild(option.cloneNode(true));
+                }
+                break;
+            case 'date':
+                dueDateSelect?.appendChild(option.cloneNode(true));
+                break;
+        }
+    });
+
+    // Load saved mapping if it exists
+    loadNotionFieldMapping();
+}
+
+// Function to save the Notion field mapping
+function saveNotionFieldMapping() {
+    const mapping = {
+        taskName: document.getElementById('map-notion-task-name')?.value || '',
+        priority: document.getElementById('map-notion-priority')?.value || '',
+        dueDate: document.getElementById('map-notion-due-date')?.value || '',
+        category: document.getElementById('map-notion-category')?.value || '',
+        status: document.getElementById('map-notion-status')?.value || '',
+        statusOption: document.getElementById('map-notion-status-option')?.value || ''
+    };
+
+    // Save to localStorage
+    localStorage.setItem('notionFieldMapping', JSON.stringify(mapping));
+    
+    // Show success message
+    const statusElement = document.getElementById('notion-mapping-status');
+    if (statusElement) {
+        statusElement.textContent = 'Mapping succesvol opgeslagen!';
+        statusElement.className = 'status-message success';
+        setTimeout(() => {
+            statusElement.textContent = '';
+            statusElement.className = 'status-message';
+        }, 3000);
+    }
+}
+
+// Function to load saved Notion field mapping
+function loadNotionFieldMapping() {
+    const savedMapping = localStorage.getItem('notionFieldMapping');
+    if (!savedMapping) return;
+
+    try {
+        const mapping = JSON.parse(savedMapping);
+        
+        // Set values in select elements
+        if (mapping.taskName) document.getElementById('map-notion-task-name').value = mapping.taskName;
+        if (mapping.priority) document.getElementById('map-notion-priority').value = mapping.priority;
+        if (mapping.dueDate) document.getElementById('map-notion-due-date').value = mapping.dueDate;
+        if (mapping.category) document.getElementById('map-notion-category').value = mapping.category;
+        if (mapping.status) {
+            const statusSelect = document.getElementById('map-notion-status');
+            statusSelect.value = mapping.status;
+            // Trigger change event to show status options if needed
+            statusSelect.dispatchEvent(new Event('change'));
+            if (mapping.statusOption) {
+                document.getElementById('map-notion-status-option').value = mapping.statusOption;
+            }
+        }
+    } catch (error) {
+        console.error('Error loading Notion field mapping:', error);
+    }
+}
+
+// Function to update status options when status field is selected
+function updateStatusOptions(propertyName) {
+    const statusOptionSelect = document.getElementById('map-notion-status-option');
+    if (!statusOptionSelect || !notionDatabaseSchema) return;
+    
+    // Clear existing options
+    statusOptionSelect.innerHTML = '<option value="">-- Selecteer Standaard Optie --</option>';
+    
+    const property = notionDatabaseSchema[propertyName];
+    if (property && property.type === 'select' && property.select && property.select.options) {
+        property.select.options.forEach(option => {
+            const optionElement = document.createElement('option');
+            optionElement.value = option.name;
+            optionElement.textContent = option.name;
+            statusOptionSelect.appendChild(optionElement);
+        });
+    }
+}
+
+// Add event listeners for mapping UI
+function setupNotionMappingListeners() {
+    // Save mapping button
+    const saveButton = document.getElementById('save-notion-mapping-button');
+    if (saveButton) {
+        saveButton.addEventListener('click', saveNotionFieldMapping);
+    }
+
+    // Status field change handler
+    const statusSelect = document.getElementById('map-notion-status');
+    if (statusSelect) {
+        statusSelect.addEventListener('change', (e) => {
+            updateStatusOptions(e.target.value);
+        });
+    }
+}
+
+// Modify the existing fetchNotionDatabaseSchema function to call populateNotionMappingUI
+async function fetchNotionDatabaseSchema() {
+    if (!notionApiKey || !notionDatabaseId) {
+        console.warn('Notion API Key or Database ID is missing. Cannot fetch schema.');
+        return false;
+    }
+
+    console.log(`Fetching schema for database ID: ${notionDatabaseId}`);
+
+    try {
+        // Use Vercel proxy endpoint instead of direct Notion API
+        const proxyUrl = `/api/notion?endpoint=databases/${notionDatabaseId}`;
+        
+        const response = await fetch(proxyUrl, {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${notionApiKey}`,
+                'Notion-Version': '2022-06-28',
+                'Content-Type': 'application/json'
+            }
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => null);
+            console.error('Notion API error via proxy:', errorData);
+            
+            // Provide specific error feedback
+            let errorMessage = 'Notion database schema ophalen mislukt. ';
+            if (response.status === 401) {
+                errorMessage += 'API key is ongeldig.';
+            } else if (response.status === 404) {
+                errorMessage += 'Database niet gevonden of niet gedeeld met integration.';
+            } else {
+                errorMessage += `HTTP ${response.status}: ${errorData?.message || 'Onbekende fout'}`;
+            }
+            
+            console.error(errorMessage);
+            notionDatabaseSchema = null;
+            return false;
+        }
+
+        const schemaData = await response.json();
+        notionDatabaseSchema = schemaData.properties;
+        console.log('Successfully fetched Notion database schema via proxy:', notionDatabaseSchema);
+        
+        // Populate the mapping UI with the schema
+        populateNotionMappingUI(notionDatabaseSchema);
+        
+        // Setup event listeners for the mapping UI
+        setupNotionMappingListeners();
+        
+        return true;
+
+    } catch (error) {
+        console.error('Exception while fetching Notion database schema via proxy:', error);
+        
+        // More specific error detection for proxy usage
+        if (error.name === 'TypeError' && error.message.includes('fetch')) {
+            console.error('Network error detected - check if Vercel proxy is deployed');
+        }
+        
+        notionDatabaseSchema = null;
+        return false;
+    }
+}
+
+// Function to format a task for Notion API
+function formatTaskForNotion(task) {
+    const mapping = JSON.parse(localStorage.getItem('notionFieldMapping') || '{}');
+    
+    // Start with the required parent database
+    const notionTask = {
+        parent: { database_id: notionDatabaseId },
+        properties: {}
+    };
+    
+    // Map task name to title property
+    if (mapping.taskName) {
+        notionTask.properties[mapping.taskName] = {
+            title: [
+                {
+                    text: {
+                        content: task.task
+                    }
+                }
+            ]
+        };
+    }
+    
+    // Map priority
+    if (mapping.priority && task.criticality) {
+        notionTask.properties[mapping.priority] = {
+            select: {
+                name: task.criticality
+            }
+        };
+    }
+    
+    // Map due date
+    if (mapping.dueDate && task.due_date) {
+        notionTask.properties[mapping.dueDate] = {
+            date: {
+                start: task.due_date
+            }
+        };
+    }
+    
+    // Map category
+    if (mapping.category && task.category) {
+        notionTask.properties[mapping.category] = {
+            select: {
+                name: task.category
+            }
+        };
+    }
+    
+    // Map status if configured
+    if (mapping.status && mapping.statusOption) {
+        notionTask.properties[mapping.status] = {
+            select: {
+                name: mapping.statusOption
+            }
+        };
+    }
+    
+    return notionTask;
+}
+
+// Function to add tasks to Notion
+async function addTasksToNotion(tasks) {
+    if (!notionApiKey || !notionDatabaseId) {
+        console.warn('Notion API Key or Database ID is missing');
+        return false;
+    }
+    
+    const mapping = JSON.parse(localStorage.getItem('notionFieldMapping') || '{}');
+    if (!mapping.taskName) {
+        console.warn('Notion field mapping is not configured');
+        return false;
+    }
+    
+    try {
+        const results = [];
+        for (const task of tasks) {
+            const notionTask = formatTaskForNotion(task);
+            
+            // Use Vercel proxy endpoint instead of direct Notion API
+            const proxyUrl = '/api/notion?endpoint=pages';
+            
+            const response = await fetch(proxyUrl, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${notionApiKey}`,
+                    'Notion-Version': '2022-06-28',
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(notionTask)
+            });
+            
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => response.text());
+                console.error('Error adding task to Notion via proxy:', errorData);
+                throw new Error(`Failed to add task to Notion: ${errorData.error?.message || errorData}`);
+            }
+            
+            const result = await response.json();
+            results.push(result);
+        }
+        
+        return results;
+    } catch (error) {
+        console.error('Error in addTasksToNotion via proxy:', error);
+        throw error;
+    }
+}
+
+// Settings Panel Functions
+function initializeSettingsPanel() {
+    console.log('Initializing settings panel...');
+    
+    const settingsGearIcon = document.getElementById('settings-gear-icon');
+    const settingsOverlay = document.getElementById('settings-overlay');
+    const settingsCloseButton = document.getElementById('settings-close-button');
+    const settingsCancelButton = document.getElementById('settings-cancel-button');
+    const settingsSaveButton = document.getElementById('settings-save-button');
+    const settingsTabs = document.querySelectorAll('.settings-tab');
+    
+
+    
+    if (!settingsGearIcon || !settingsOverlay) {
+        console.error('Settings panel elements not found');
+        return;
+    }
+    
+    // Open settings panel
+    settingsGearIcon.addEventListener('click', () => {
+        loadSettingsFromStorage();
+        settingsOverlay.classList.remove('hidden');
+    });
+    
+    // Close settings panel
+    const closeSettings = () => {
+        settingsOverlay.classList.add('hidden');
+    };
+    
+    settingsCloseButton?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        closeSettings();
+    });
+    
+    settingsCancelButton?.addEventListener('click', closeSettings);
+    
+    // Close on overlay click
+    settingsOverlay.addEventListener('click', (e) => {
+        if (e.target === settingsOverlay) {
+            closeSettings();
+        }
+    });
+    
+    // Save settings
+    settingsSaveButton?.addEventListener('click', saveSettingsFromPanel);
+    
+    // Tab switching
+    settingsTabs.forEach(tab => {
+        tab.addEventListener('click', () => {
+            const targetTab = tab.dataset.tab;
+            switchSettingsTab(targetTab);
+        });
+    });
+    
+    // Initialize Notion mapping listeners for settings panel
+    setupSettingsNotionMappingListeners();
+    
+    console.log('Settings panel initialized successfully');
+}
+
+function switchSettingsTab(targetTab) {
+    // Remove active class from all tabs and content
+    document.querySelectorAll('.settings-tab').forEach(tab => {
+        tab.classList.remove('active');
+    });
+    document.querySelectorAll('.settings-tab-content').forEach(content => {
+        content.classList.remove('active');
+    });
+    
+    // Add active class to clicked tab and corresponding content
+    document.querySelector(`[data-tab="${targetTab}"]`).classList.add('active');
+    document.getElementById(targetTab).classList.add('active');
+}
+
+function autoSaveDevelopmentKeys() {
+    console.log('Auto-saving development API keys...');
+    
+    // Development API keys removed for security - users will enter their own keys
+    const devOpenAIKey = '';
+    const devNotionKey = '';
+    const devNotionDbId = '';
+    
+    // Only save if no keys exist in storage yet
+    credentialManager.retrieveCredentials().then(existingCredentials => {
+        if (!existingCredentials.openaiApiKey && !existingCredentials.notionApiKey) {
+            console.log('No existing credentials found - users will need to enter their own API keys');
+            
+            // Don't auto-save empty credentials
+            if (devOpenAIKey && devNotionKey && devNotionDbId) {
+                const devCredentials = {
+                    openaiApiKey: devOpenAIKey,
+                    notionApiKey: devNotionKey,
+                    notionDatabaseId: devNotionDbId
+                };
+                
+                credentialManager.storeCredentials(devCredentials).then(() => {
+                    // Update global variables
+                    apiKey = devOpenAIKey;
+                    notionApiKey = devNotionKey;
+                    notionDatabaseId = devNotionDbId;
+                });
+            }
+        }
+    });
+}
+
+async function loadSettingsFromStorage() {
+    console.log('Loading settings from secure storage...');
+    
+    // Auto-save development API keys for easier testing
+    autoSaveDevelopmentKeys();
+    
+    try {
+        // Clean expired credentials first
+        await credentialManager.cleanExpiredCredentials();
+        
+        // Retrieve credentials using enhanced method with service worker fallback
+        const credentials = await credentialManager.retrieveCredentialsWithFallback();
+        
+        // Load OpenAI API Key
+        const openaiKey = credentials.openaiApiKey || '';
+        const openaiKeyInput = document.getElementById('settings-openai-key');
+        if (openaiKeyInput) {
+            openaiKeyInput.value = openaiKey;
+        }
+        
+        // Update global variable
+        if (openaiKey) {
+            apiKey = openaiKey;
+        }
+        
+        // Load Notion credentials
+        const notionKey = credentials.notionApiKey || '';
+        const notionDbId = credentials.notionDatabaseId || '';
+        
+        const notionKeyInput = document.getElementById('settings-notion-key');
+        const notionDbIdInput = document.getElementById('settings-notion-database-id');
+        
+        if (notionKeyInput) notionKeyInput.value = notionKey;
+        if (notionDbIdInput) notionDbIdInput.value = notionDbId;
+        
+        // Update global variables
+        if (notionKey) notionApiKey = notionKey;
+        if (notionDbId) notionDatabaseId = notionDbId;
+        
+        // Load Notion field mapping into settings panel
+        loadSettingsNotionFieldMapping();
+        
+        // If we have Notion credentials, fetch schema for settings panel
+        if (notionKey && notionDbId) {
+            fetchNotionSchemaForSettings();
+        }
+        
+        console.log('✅ Settings loaded successfully from secure storage');
+        
+    } catch (error) {
+        console.error('Error loading settings from secure storage:', error);
+        
+        // Fallback to legacy storage for migration
+        loadLegacyCredentials();
+    }
+}
+
+// Migration function for legacy credentials
+function loadLegacyCredentials() {
+    console.log('🔄 Checking for credentials to migrate...');
+    
+    let tempOpenAiKey = null;
+    let source = null; // To track where the key was found for cleanup
+
+    // 1. Check for 'openaiApiKey' from new interim storage (sessionStorage first)
+    tempOpenAiKey = sessionStorage.getItem('openaiApiKey');
+    if (tempOpenAiKey) {
+        source = { type: 'sessionStorage', key: 'openaiApiKey' };
+    } else {
+        // 2. Check for 'openaiApiKey' from new interim storage (localStorage)
+        tempOpenAiKey = localStorage.getItem('openaiApiKey');
+        if (tempOpenAiKey) {
+            const expiry = localStorage.getItem('openaiApiKeyExpiry');
+            if (expiry && new Date(expiry) > new Date()) {
+                source = { type: 'localStorage', key: 'openaiApiKey' };
+            } else if (expiry && new Date(expiry) <= new Date()) {
+                // Clean up expired key from interim localStorage
+                localStorage.removeItem('openaiApiKey');
+                localStorage.removeItem('openaiApiKeyExpiry');
+                tempOpenAiKey = null; // Don't use expired key
+                console.log('Cleaned expired interim openaiApiKey from localStorage.');
+            }
+        }
+    }
+
+    // 3. Fallback: Check for old 'voiceTaskApiKey' (localStorage or sessionStorage)
+    if (!tempOpenAiKey) {
+        legacyApiKey = sessionStorage.getItem('voiceTaskApiKey') || localStorage.getItem('voiceTaskApiKey') || '';
+        if (legacyApiKey) {
+            tempOpenAiKey = legacyApiKey;
+            // Determine source for cleanup, prioritize localStorage if present in both (though unlikely)
+            if (localStorage.getItem('voiceTaskApiKey')) {
+                source = { type: 'localStorage', key: 'voiceTaskApiKey' };
+            } else {
+                source = { type: 'sessionStorage', key: 'voiceTaskApiKey' };
+            }
+            console.log('Found old voiceTaskApiKey for migration.');
+        }
+    }
+    
+    // For now, we only focus on migrating OpenAI key. Notion keys are assumed to be handled by settings panel directly.
+    // let legacyNotionKey = localStorage.getItem('voiceTaskNotionApiKey') || '';
+    // let legacyNotionDbId = localStorage.getItem('voiceTaskNotionDatabaseId') || '';
+
+    if (tempOpenAiKey) {
+        console.log(`Migrating OpenAI key found in ${source.type} ('${source.key}').`);
+        const credentialsToStore = { openaiApiKey: tempOpenAiKey };
+        
+        // Attempt to get Notion keys if they are also in legacy, but primary focus is OpenAI key
+        const legacyNotionKey = localStorage.getItem('voiceTaskNotionApiKey');
+        const legacyNotionDbId = localStorage.getItem('voiceTaskNotionDatabaseId');
+        if (legacyNotionKey) credentialsToStore.notionApiKey = legacyNotionKey;
+        if (legacyNotionDbId) credentialsToStore.notionDatabaseId = legacyNotionDbId;
+
+        credentialManager.storeCredentials(credentialsToStore).then(() => {
+            console.log('✅ Credentials migrated to secure storage.');
+            
+            // Clean up the source of the migrated key
+            if (source) {
+                if (source.type === 'sessionStorage') {
+                    sessionStorage.removeItem(source.key);
+                }
+                if (source.type === 'localStorage') {
+                    localStorage.removeItem(source.key);
+                    if (source.key === 'openaiApiKey') localStorage.removeItem('openaiApiKeyExpiry');
+                    if (source.key === 'voiceTaskApiKey') localStorage.removeItem('voiceTaskApiKeyExpiry');
+                }
+                console.log(`Cleaned up migrated key from ${source.type}: ${source.key}`);
+            }
+            
+            // Also clean up potentially orphaned Notion legacy keys if they were migrated
+            if (legacyNotionKey) localStorage.removeItem('voiceTaskNotionApiKey');
+            if (legacyNotionDbId) localStorage.removeItem('voiceTaskNotionDatabaseId');
+
+            // Reload settings from storage to reflect migrated key in UI
+            // This might cause a loop if storeCredentials also calls loadLegacyCredentials indirectly.
+            // However, the cleanup should prevent re-migration.
+            loadSettingsFromStorage(); 
+        }).catch(error => {
+            console.error('Error migrating credentials:', error);
+        });
+    } else {
+        console.log('No legacy credentials found needing migration for OpenAI key.');
+    }
+}
+
+async function saveSettingsFromPanel() {
+    console.log('Saving settings from panel...');
+    
+    const openaiKeyInput = document.getElementById('settings-openai-key');
+    const notionKeyInput = document.getElementById('settings-notion-key');
+    const notionDbIdInput = document.getElementById('settings-notion-database-id');
+    
+    const openaiKey = openaiKeyInput?.value.trim() || '';
+    const notionKey = notionKeyInput?.value.trim() || '';
+    const notionDbId = notionDbIdInput?.value.trim() || '';
+    
+    // Validate OpenAI key
+    if (openaiKey && !openaiKey.startsWith('sk-')) {
+        alert('Ongeldige OpenAI API key. Deze moet beginnen met "sk-"');
+        return;
+    }
+    
+    try {
+        // Store credentials using enhanced method with service worker backup
+        const credentials = {
+            openaiApiKey: openaiKey,
+            notionApiKey: notionKey,
+            notionDatabaseId: notionDbId
+        };
+        
+        await credentialManager.storeCredentialsWithBackup(credentials);
+        
+        // Update global variables
+        if (openaiKey) apiKey = openaiKey;
+        if (notionKey) notionApiKey = notionKey;
+        if (notionDbId) notionDatabaseId = notionDbId;
+        
+        // Save field mapping
+        saveSettingsNotionFieldMapping();
+        
+        // Fetch schema if both are provided
+        if (notionKey && notionDbId) {
+            try {
+                await fetchNotionSchemaForSettings();
+            } catch (error) {
+                console.error('Error fetching Notion schema:', error);
+            }
+        }
+        
+        // Close settings panel
+        document.getElementById('settings-overlay').classList.add('hidden');
+        
+        // Show success message with enhanced persistence indicator
+        const statusElement = document.getElementById('status');
+        if (statusElement) {
+            const originalText = statusElement.textContent;
+            statusElement.textContent = '✅ Instellingen veilig opgeslagen met backup!';
+            statusElement.style.backgroundColor = '#e8f5e9';
+            statusElement.style.color = '#2e7d32';
+            
+            setTimeout(() => {
+                statusElement.textContent = originalText;
+                statusElement.style.backgroundColor = '';
+                statusElement.style.color = '';
+            }, 3000);
+        }
+        
+        console.log('✅ Settings saved successfully with enhanced backup');
+        
+    } catch (error) {
+        console.error('Error saving settings:', error);
+        alert('Fout bij opslaan van instellingen. Probeer het opnieuw.');
+    }
+}
+
+function setupSettingsNotionMappingListeners() {
+    const statusSelect = document.getElementById('settings-map-status');
+    const statusOptionSelect = document.getElementById('settings-map-status-option');
+    
+    if (statusSelect && statusOptionSelect) {
+        statusSelect.addEventListener('change', function() {
+            if (this.value) {
+                updateSettingsStatusOptions(this.value);
+                statusOptionSelect.classList.remove('hidden');
+            } else {
+                statusOptionSelect.classList.add('hidden');
+            }
+        });
+    }
+}
+
+function loadSettingsNotionFieldMapping() {
+    const savedMapping = localStorage.getItem('notionFieldMapping');
+    if (!savedMapping) return;
+    
+    try {
+        const mapping = JSON.parse(savedMapping);
+        
+        // Load task name mapping
+        const taskNameSelect = document.getElementById('settings-map-task-name');
+        if (taskNameSelect && mapping.taskName) {
+            taskNameSelect.value = mapping.taskName;
+        }
+        
+        // Load priority mapping
+        const prioritySelect = document.getElementById('settings-map-priority');
+        if (prioritySelect && mapping.priority) {
+            prioritySelect.value = mapping.priority;
+        }
+        
+        // Load due date mapping
+        const dueDateSelect = document.getElementById('settings-map-due-date');
+        if (dueDateSelect && mapping.dueDate) {
+            dueDateSelect.value = mapping.dueDate;
+        }
+        
+        // Load category mapping
+        const categorySelect = document.getElementById('settings-map-category');
+        if (categorySelect && mapping.category) {
+            categorySelect.value = mapping.category;
+        }
+        
+        // Load status mapping
+        const statusSelect = document.getElementById('settings-map-status');
+        const statusOptionSelect = document.getElementById('settings-map-status-option');
+        if (statusSelect && mapping.status) {
+            statusSelect.value = mapping.status;
+            if (mapping.statusOption && statusOptionSelect) {
+                updateSettingsStatusOptions(mapping.status);
+                statusOptionSelect.classList.remove('hidden');
+                statusOptionSelect.value = mapping.statusOption;
+            }
+        }
+        
+        console.log('Loaded field mapping into settings panel');
+    } catch (error) {
+        console.error('Error loading field mapping for settings panel:', error);
+    }
+}
+
+function saveSettingsNotionFieldMapping() {
+    const taskNameSelect = document.getElementById('settings-map-task-name');
+    const prioritySelect = document.getElementById('settings-map-priority');
+    const dueDateSelect = document.getElementById('settings-map-due-date');
+    const categorySelect = document.getElementById('settings-map-category');
+    const statusSelect = document.getElementById('settings-map-status');
+    const statusOptionSelect = document.getElementById('settings-map-status-option');
+    
+    const mapping = {
+        taskName: taskNameSelect?.value || '',
+        priority: prioritySelect?.value || '',
+        dueDate: dueDateSelect?.value || '',
+        category: categorySelect?.value || '',
+        status: statusSelect?.value || '',
+        statusOption: statusOptionSelect?.value || ''
+    };
+    
+    localStorage.setItem('notionFieldMapping', JSON.stringify(mapping));
+    console.log('Saved field mapping from settings panel');
+}
+
+async function fetchNotionSchemaForSettings() {
+    if (!notionApiKey || !notionDatabaseId) {
+        console.log('Missing Notion credentials for schema fetch');
+        return;
+    }
+    
+    console.log('Fetching Notion schema for settings panel via proxy...');
+    
+    try {
+        // Use Vercel proxy endpoint instead of direct Notion API
+        const proxyUrl = `/api/notion?endpoint=databases/${notionDatabaseId}`;
+        
+        const response = await fetch(proxyUrl, {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${notionApiKey}`,
+                'Notion-Version': '2022-06-28',
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => null);
+            console.error('Notion API error via proxy:', errorData);
+            throw new Error(`HTTP error! status: ${response.status} - ${errorData?.message || 'Unknown error'}`);
+        }
+        
+        const data = await response.json();
+        notionDatabaseSchema = data.properties;
+        
+        populateSettingsNotionMappingUI(data.properties);
+        
+        // Setup event listeners for the mapping UI
+        setupSettingsNotionMappingListeners();
+        
+        console.log('Notion schema fetched successfully for settings panel via proxy');
+    } catch (error) {
+        console.error('Error fetching Notion schema for settings via proxy:', error);
+        
+        const statusElement = document.getElementById('settings-notion-mapping-status');
+        if (statusElement) {
+            let errorMessage = 'Fout bij ophalen database schema. ';
+            
+            // Detect different error types
+            if (error.message.includes('401') || error.message.includes('unauthorized')) {
+                errorMessage += 'API key is ongeldig. Controleer je Notion API key.';
+            }
+            // Detect not found error
+            else if (error.message.includes('404') || error.message.includes('object_not_found')) {
+                errorMessage += 'Database niet gevonden. Controleer of:\n' +
+                              '• Database ID correct is\n' +
+                              '• Database gedeeld is met je integration\n' +
+                              '• Integration toegang heeft tot de database';
+            }
+            // Network/proxy errors
+            else if (error.name === 'TypeError' && error.message.includes('fetch')) {
+                errorMessage += 'Netwerkfout gedetecteerd. Controleer of de Vercel proxy correct is gedeployed.';
+            }
+            else {
+                errorMessage += 'Controleer je Notion configuratie. Details: ' + error.message;
+            }
+            
+            statusElement.textContent = errorMessage;
+            statusElement.className = 'status-message error';
+        }
+    }
+}
+
+function populateSettingsNotionMappingUI(schema) {
+    console.log('Populating settings Notion mapping UI with schema:', schema);
+    
+    // Get all select elements
+    const taskNameSelect = document.getElementById('settings-map-task-name');
+    const prioritySelect = document.getElementById('settings-map-priority');
+    const dueDateSelect = document.getElementById('settings-map-due-date');
+    const categorySelect = document.getElementById('settings-map-category');
+    const statusSelect = document.getElementById('settings-map-status');
+    
+    const selects = [taskNameSelect, prioritySelect, dueDateSelect, categorySelect, statusSelect];
+    
+    // Clear all selects first (keep first option)
+    selects.forEach(select => {
+        if (select) {
+            // Keep first option and clear rest
+            const firstOption = select.firstElementChild;
+            select.innerHTML = '';
+            if (firstOption) {
+                select.appendChild(firstOption);
+            }
+        }
+    });
+    
+    // Add options based on schema with intelligent auto-mapping
+    Object.entries(schema).forEach(([propertyName, propertyConfig]) => {
+        const option = document.createElement('option');
+        option.value = propertyName;
+        option.textContent = `${propertyName} (${propertyConfig.type})`;
+        
+        // Add to appropriate select based on property type and intelligent mapping
+        switch (propertyConfig.type) {
+            case 'title':
+                if (taskNameSelect) {
+                    taskNameSelect.appendChild(option.cloneNode(true));
+                    // Auto-select title field for task name
+                    taskNameSelect.value = propertyName;
+                }
+                break;
+            case 'select':
+                const lowerName = propertyName.toLowerCase();
+                if ((lowerName.includes('priority') || lowerName.includes('prioriteit')) && prioritySelect) {
+                    prioritySelect.appendChild(option.cloneNode(true));
+                    // Auto-select priority field
+                    prioritySelect.value = propertyName;
+                } else if ((lowerName.includes('category') || lowerName.includes('categorie')) && categorySelect) {
+                    categorySelect.appendChild(option.cloneNode(true));
+                    // Auto-select category field
+                    categorySelect.value = propertyName;
+                } else if (lowerName.includes('status') && statusSelect) {
+                    statusSelect.appendChild(option.cloneNode(true));
+                    // Auto-select status field
+                    statusSelect.value = propertyName;
+                    // Trigger status options update
+                    updateSettingsStatusOptions(propertyName);
+                    statusSelect.classList.remove('hidden');
+                }
+                // Also add to all other select fields as options
+                selects.forEach(select => {
+                    if (select && select !== taskNameSelect) {
+                        const optionCopy = document.createElement('option');
+                        optionCopy.value = propertyName;
+                        optionCopy.textContent = `${propertyName} (${propertyConfig.type})`;
+                        select.appendChild(optionCopy);
+                    }
+                });
+                break;
+            case 'date':
+                if (dueDateSelect) {
+                    dueDateSelect.appendChild(option.cloneNode(true));
+                    // Auto-select date field for due date
+                    dueDateSelect.value = propertyName;
+                }
+                // Also add to other selects
+                selects.forEach(select => {
+                    if (select && select !== dueDateSelect) {
+                        const optionCopy = document.createElement('option');
+                        optionCopy.value = propertyName;
+                        optionCopy.textContent = `${propertyName} (${propertyConfig.type})`;
+                        select.appendChild(optionCopy);
+                    }
+                });
+                break;
+            default:
+                // Add to all selects for other property types
+                selects.forEach(select => {
+                    if (select) {
+                        const optionCopy = document.createElement('option');
+                        optionCopy.value = propertyName;
+                        optionCopy.textContent = `${propertyName} (${propertyConfig.type})`;
+                        select.appendChild(optionCopy);
+                    }
+                });
+                break;
+        }
+    });
+    
+    // Save the automatically detected mapping
+    saveSettingsNotionFieldMapping();
+    
+    // Then load any existing saved mapping (which may override the auto-detected values)
+    loadSettingsNotionFieldMapping();
+    
+    console.log('Settings Notion mapping UI populated successfully with auto-mapping');
+}
+
+function updateSettingsStatusOptions(propertyName) {
+    const statusOptionSelect = document.getElementById('settings-map-status-option');
+    if (!statusOptionSelect || !notionDatabaseSchema) return;
+    
+    // Clear existing options
+    statusOptionSelect.innerHTML = '<option value="">-- Selecteer Standaard Optie --</option>';
+    
+    const property = notionDatabaseSchema[propertyName];
+    if (property && property.type === 'select' && property.select && property.select.options) {
+        property.select.options.forEach(option => {
+            const optionElement = document.createElement('option');
+            optionElement.value = option.name;
+            optionElement.textContent = option.name;
+            statusOptionSelect.appendChild(optionElement);
+        });
+    }
+}
+
+console.log('✅ All event listeners setup complete'); 
+
+// Function to delete a specific task by index
+function deleteTask(taskIndex) {
+    if (taskIndex >= 0 && taskIndex < allTasks.length) {
+        const deletedTask = allTasks[taskIndex];
+        
+        // Remove task from array
+        allTasks.splice(taskIndex, 1);
+        
+        // Save updated tasks
+        saveTasks();
+        
+        // Re-display remaining tasks
+        if (allTasks.length > 0) {
+            displayTasks(allTasks);
+        } else {
+            // No tasks left, show empty state
+            tasksContainer.classList.remove('hidden');
+            tasksElement.innerHTML = '<p>Geen taken meer. Start een nieuwe opname om taken toe te voegen.</p>';
+        }
+        
+        // Update status
+        const statusElement = document.getElementById('status');
+        if (statusElement) {
+            const isTaskInDutch = deletedTask.criticality && 
+                                 ['laag', 'normaal', 'hoog', 'zeer hoog'].includes(deletedTask.criticality.toLowerCase());
+            statusElement.textContent = isTaskInDutch ? 
+                'Taak verwijderd' : 
+                'Task deleted';
+        }
+        
+        console.log(`Task deleted: ${deletedTask.task}`);
+    } else {
+        console.error('Invalid task index for deletion:', taskIndex);
+    }
+}
+
+// Helper function to detect if a task is in Dutch
+>>>>>>> Stashed changes

@@ -38,17 +38,25 @@
                 if (inputKey && inputKey.startsWith('sk-')) {
                     const shouldRemember = rememberKeyCheckbox && rememberKeyCheckbox.checked;
                     
+                    // Clear old keys first
+                    localStorage.removeItem('voiceTaskApiKey');
+                    localStorage.removeItem('voiceTaskApiKeyExpiry');
+                    sessionStorage.removeItem('voiceTaskApiKey');
+
                     if (shouldRemember) {
                         // Bewaar voor 30 dagen in localStorage met vervaldatum
                         const expiryDate = new Date();
                         expiryDate.setDate(expiryDate.getDate() + 30); // 30 dagen
-                        localStorage.setItem('voiceTaskApiKey', inputKey);
-                        localStorage.setItem('voiceTaskApiKeyExpiry', expiryDate.toISOString());
+                        localStorage.setItem('openaiApiKey', inputKey);
+                        localStorage.setItem('openaiApiKeyExpiry', expiryDate.toISOString());
+                        // Ensure session storage is clean if "remember me" is chosen
+                        sessionStorage.removeItem('openaiApiKey'); 
                     } else {
                         // Bewaar alleen in sessie storage (verloren bij sluiten browser)
-                        sessionStorage.setItem('voiceTaskApiKey', inputKey);
-                        localStorage.removeItem('voiceTaskApiKey');
-                        localStorage.removeItem('voiceTaskApiKeyExpiry');
+                        sessionStorage.setItem('openaiApiKey', inputKey);
+                        // Ensure local storage is clean if "remember me" is not chosen
+                        localStorage.removeItem('openaiApiKey');
+                        localStorage.removeItem('openaiApiKeyExpiry');
                     }
                     
                     // Switch screens
@@ -65,6 +73,71 @@
                 if (!appScreen) console.error('App screen not found');
             }
         }
+    </script>
+    <script>
+        // Automatic sign-in logic
+        (function() {
+            console.log('Checking for existing API key for auto-login...');
+            let apiKeyToUse = null;
+            let apiKeyExpiry = null;
+
+            // Primary check: SecureCredentialManager's localStorage backup
+            try {
+                const secureApiKeyData = localStorage.getItem('secure_openaiApiKey');
+                if (secureApiKeyData) {
+                    const parsedData = JSON.parse(secureApiKeyData);
+                    if (parsedData && parsedData.value && parsedData.expiryDate && new Date(parsedData.expiryDate) > new Date()) {
+                        // This key is encrypted, app.js will decrypt. We just confirm its presence and validity.
+                        apiKeyToUse = "encrypted_key_present"; // Indicates a key is present in secure backup
+                        console.log('Found valid key in secure localStorage backup.');
+                    } else if (parsedData && parsedData.expiryDate && new Date(parsedData.expiryDate) <= new Date()) {
+                        localStorage.removeItem('secure_openaiApiKey'); // Clean up expired key
+                        console.log('Removed expired key from secure localStorage backup.');
+                    }
+                }
+            } catch (e) {
+                console.error('Error reading secure_openaiApiKey from localStorage:', e);
+            }
+
+            // Secondary check: Plain openaiApiKey from initial login (if primary check failed)
+            if (!apiKeyToUse) {
+                try {
+                    const plainApiKey = localStorage.getItem('openaiApiKey');
+                    const plainApiKeyExpiryStr = localStorage.getItem('openaiApiKeyExpiry');
+                    if (plainApiKey && plainApiKeyExpiryStr) {
+                        apiKeyExpiry = new Date(plainApiKeyExpiryStr);
+                        if (apiKeyExpiry > new Date()) {
+                            apiKeyToUse = plainApiKey; // Actual key, app.js will re-validate and migrate
+                            console.log('Found valid key in standard localStorage.');
+                        } else {
+                            localStorage.removeItem('openaiApiKey');
+                            localStorage.removeItem('openaiApiKeyExpiry');
+                            console.log('Removed expired key from standard localStorage.');
+                        }
+                    }
+                } catch (e) {
+                    console.error('Error reading openaiApiKey from localStorage:', e);
+                }
+            }
+
+            // If a key is found and seems valid, switch screens
+            if (apiKeyToUse) {
+                // Wait for DOM to be ready to manipulate elements
+                document.addEventListener('DOMContentLoaded', function() {
+                    const loginScreen = document.getElementById('login-screen');
+                    const appScreen = document.getElementById('app-screen');
+                    if (loginScreen && appScreen) {
+                        loginScreen.classList.add('hidden');
+                        appScreen.classList.remove('hidden');
+                        console.log('Auto-login: Switched to app screen.');
+                    } else {
+                        console.error('Auto-login: Login/App screen elements not found on DOMContentLoaded.');
+                    }
+                });
+            } else {
+                console.log('No valid API key found for auto-login. Login screen will be shown.');
+            }
+        })();
     </script>
 </head>
 <body>
