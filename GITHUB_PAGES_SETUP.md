@@ -1,6 +1,6 @@
-# Deploying Your Voice Task Manager to GitHub Pages
+# Deploying Striks Whisperer to GitHub Pages
 
-This guide will walk you through the process of deploying your Voice Task Manager application to GitHub Pages, so you can access it from any device.
+This guide will walk you through the process of deploying your Striks Whisperer application to GitHub Pages, so you can access it from any device.
 
 ## Step 1: Create a GitHub Account
 
@@ -59,7 +59,7 @@ git push -u origin main
 
 1. Wait a few minutes for GitHub to deploy your site
 2. Visit the URL provided in the GitHub Pages section
-3. Your Voice Task Manager should now be accessible!
+3. Your Striks Whisperer instance should now be accessible!
 
 ## Important Notes
 

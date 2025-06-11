@@ -7,7 +7,7 @@
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
-    <title>Striks Voice Task Manager</title>
+    <title>Striks Whisperer</title>
     <link rel="stylesheet" href="styles.css">
     <!-- Add manifest link for PWA support -->
     <link rel="manifest" href="manifest.json">
@@ -101,7 +101,7 @@
         <div id="login-screen" class="screen">
             <div class="app-header">
                 <img src="Log.png" class="app-logo" alt="Striks Logo">
-                <h1>Striks Voice Task Manager</h1>
+                <h1>Striks Whisperer</h1>
             </div>
             <div class="screen-content" style="padding: 20px;">
                 <p>Voer je OpenAI API key in om door te gaan:</p>
@@ -118,14 +118,12 @@
         <div id="app-screen" class="screen hidden">
             <div class="app-header">
                 <img src="Log.png" class="app-logo" alt="Striks Logo">
-                <h1>Striks Voice Task Manager</h1>
+                <h1>Striks Whisperer</h1>
             </div>
             <div class="screen-content" style="padding: 20px;">
                 <div class="controls">
                     <button id="record-button" class="primary-button">Start Opname</button>
                     <div class="button-group">
-                        <button id="view-all-tasks-button" class="secondary-button" style="margin-right: 10px;">Alle Taken Weergeven</button>
-                        <button id="clear-all-tasks-button" class="secondary-button danger" style="margin-right: 10px;">Alle Taken Wissen</button>
                         <button id="logout-button" class="secondary-button">Uitloggen</button>
                     </div>
                 </div>
@@ -148,11 +146,6 @@
                     <button id="copy-transcription-button" class="secondary-button">Kopieer Transcriptie</button>
                 </div>
                 
-                <div id="tasks-container" class="hidden">
-                    <h2>Taken</h2>
-                    <div id="tasks" class="tasks-list"></div>
-                    <button id="copy-button" class="secondary-button">Kopieer Alle Taken</button>
-                </div>
             </div>
         </div>
         

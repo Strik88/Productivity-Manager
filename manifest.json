@@ -1,7 +1,7 @@
 {
-  "name": "Striks Voice Task Manager",
-  "short_name": "Voice Tasks",
-  "description": "Create and manage tasks using your voice",
+  "name": "Striks Whisperer",
+  "short_name": "Whisperer",
+  "description": "Transcribe your speech using OpenAI Whisper",
   "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#ffffff",
