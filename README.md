@@ -1,13 +1,12 @@
-# Voice Task Manager
+# Striks Whisperer
 
-A simple web application that lets you create tasks using your voice. The app transcribes your speech using OpenAI's Whisper API and then extracts actionable tasks using GPT.
+A simple web application that lets you dictate text using your voice. The app transcribes your speech using OpenAI's Whisper API.
 
 ## Features
 
 - Voice-to-text transcription
-- Automatic task extraction with priorities, due dates, and categories
 - Secure API key storage (stored only in your browser's local storage)
-- Copy tasks to clipboard for use in other applications
+- Copy the transcript to your clipboard
 - Works on both desktop and mobile devices
 
 ## How to Use
@@ -21,17 +20,15 @@ A simple web application that lets you create tasks using your voice. The app tr
 ### Step 2: Use the App
 
 1. Enter your OpenAI API key when prompted
-2. Click "Start Recording" and speak your tasks clearly
+2. Click "Start Recording" and speak clearly
 3. After you finish speaking, click "Stop Recording"
-4. The app will transcribe your speech and extract tasks
-5. Use the "Copy All Tasks" button to copy tasks to clipboard for use in other applications
+4. The app will transcribe your speech and show the text
+5. Use the "Copy Transcript" button to copy it to your clipboard
 
-### Examples of What to Say
+### Example Phrases
 
-- "Call John about the project proposal by Friday, it's very important"
-- "Buy groceries today and clean the kitchen tomorrow"
-- "Finish writing the report for work, high priority, due next Monday"
-- "Schedule a doctor's appointment sometime next week"
+- "This is a short test of the transcription system"
+- "Dictate notes for my meeting tomorrow"
 
 ## Privacy Notice
 
@@ -60,10 +57,8 @@ To deploy your own version of this app on GitHub Pages:
 
 ## Future Enhancements
 
-- Integration with Notion (coming soon)
 - Dark mode support
-- Multiple task lists
-- Export options to different formats
+- Offline recording
 
 ## License
 
